@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.Flow
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveSettings(v:AppSettings)
  @Query("SELECT COUNT(*) FROM work_days") suspend fun dayCount():Int
  @Query("SELECT COUNT(*) FROM gps_points WHERE latitude >= 47.70") suspend fun northernDemoPointCount():Int
+ @Query("DELETE FROM work_days") suspend fun clearAllWorkDays()
  @Query("SELECT * FROM route_plan_configs WHERE workDayId=:dayId") fun observeRouteConfig(dayId:Long):Flow<RoutePlanConfig?>
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveRouteConfig(v:RoutePlanConfig)
 }

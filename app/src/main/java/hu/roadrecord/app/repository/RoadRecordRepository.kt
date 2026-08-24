@@ -6,7 +6,7 @@ import java.time.LocalDate
 
 class RoadRecordRepository(private val dao:RoadRecordDao){
  val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val settings=dao.observeSettings().map{it?:AppSettings()}
- suspend fun ensureDefaults(){if(dao.settings()==null)dao.saveSettings(AppSettings()); if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
+ suspend fun ensureDefaults(){val current=dao.settings();if(current==null)dao.saveSettings(AppSettings())else if(current.dataResetVersion<1){dao.clearAllWorkDays();dao.saveSettings(current.copy(dataResetVersion=1))};if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
  suspend fun activeDay()=dao.dayByDate(LocalDate.now().toString())
  suspend fun startWork(now:Long=System.currentTimeMillis()):Long { ensureDefaults(); val existing=activeDay(); if(existing!=null)return existing.day.id; val p=dao.activePeriod()?:error("Nincs aktív időszak"); val id=dao.insertDay(WorkDay(periodId=p.id,date=LocalDate.now().toString())); dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now)); return id }
  suspend fun nextAction(dayId:Long,now:Long=System.currentTimeMillis()):EventType { val e=dao.events(dayId); val next=when(e.lastOrNull()?.type){null->EventType.WORK_START;EventType.WORK_START,EventType.TRIP_END->EventType.TRIP_START;EventType.TRIP_START->EventType.TRIP_END;EventType.WORK_END->throw IllegalStateException("A munkanap már lezárult")}; addEvent(dayId,next,now); return next }
@@ -31,7 +31,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao){
  suspend fun addGpsPoint(v:GpsPoint)=dao.insertGpsPoint(v)
  suspend fun activeTrip(dayId:Long)=dao.activeTrip(dayId)
  suspend fun seedDemo(){
-  ensureDefaults();val period=dao.activePeriod()!!
+  ensureDefaults()
   listOf("Budapesti telephely","Váci partner","Szokolyai ügyfél","Verőcei megálló","Kismarosi partner","Nagymarosi ügyfél").forEach{name->dao.placeByName(name)?.let{dao.deletePlace(it)}}
   val places=listOf(
    LocationPlace(name="Kismaros CBA",officialAddress="2623 Kismaros, Szokolyai út 3.",latitude=47.8263645,longitude=19.0133502),
@@ -60,25 +60,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao){
    LocationPlace(name="Buzik",officialAddress="1065 Budapest, Nagymező utca 64.",latitude=47.5060452,longitude=19.0560832),
    LocationPlace(type=PlaceType.BAKERY,name="Vekni pékség",officialAddress="2624 Szokolya, Fő út 110.",latitude=47.8705247,longitude=19.00066,note="Home – a napi túraterv fix kiindulási és érkezési pontja")
   )
-  val placeIds=places.map{sample->val existing=dao.placeByName(sample.name);if(existing==null)dao.insertPlace(sample)else{dao.updatePlace(existing.copy(type=sample.type,officialAddress=sample.officialAddress,latitude=sample.latitude,longitude=sample.longitude));existing.id}}
-  if(dao.northernDemoPointCount()>0)return
-  val routes=listOf(
-   doubleArrayOf(47.5518,19.0732,47.7759,19.1360),doubleArrayOf(47.7759,19.1360,47.8685,19.0090),
-   doubleArrayOf(47.5518,19.0732,47.8245,19.0343),doubleArrayOf(47.8245,19.0343,47.8376,18.9858),
-   doubleArrayOf(47.5518,19.0732,47.8685,19.0090),doubleArrayOf(47.8685,19.0090,47.7887,18.9598),
-   doubleArrayOf(47.7759,19.1360,47.8376,18.9858),doubleArrayOf(47.7887,18.9598,47.5518,19.0732),
-   doubleArrayOf(47.8376,18.9858,47.5518,19.0732),doubleArrayOf(47.8245,19.0343,47.7759,19.1360)
-  )
-  routes.forEachIndexed{i,r->
-   val date=LocalDate.now().minusDays((10-i).toLong());val existing=dao.dayByDate(date.toString());val base=date.atTime(7+i%2,30).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-   val day=existing?.day?.id?:dao.insertDay(WorkDay(periodId=period.id,date=date.toString()))
-   val oldEvents=existing?.events?.sortedBy{it.timestamp}.orEmpty();val ts=oldEvents.firstOrNull{it.type==EventType.TRIP_START}?.id?:run{dao.insertEvent(WorkEvent(workDayId=day,type=EventType.WORK_START,timestamp=base));dao.insertEvent(WorkEvent(workDayId=day,type=EventType.TRIP_START,timestamp=base+45*60000))}
-   val te=oldEvents.firstOrNull{it.type==EventType.TRIP_END}?.id?:dao.insertEvent(WorkEvent(workDayId=day,type=EventType.TRIP_END,timestamp=base+135*60000))
-   if(oldEvents.none{it.type==EventType.WORK_END})dao.insertEvent(WorkEvent(workDayId=day,type=EventType.WORK_END,timestamp=base+8*60*60000))
-   val trip=dao.insertTrip(Trip(workDayId=day,startEventId=ts,endEventId=te,distanceMeters=28000.0+i*4200))
-   repeat(18){p->val f=p/17.0;val bend=kotlin.math.sin(Math.PI*f)*.012*((i%3)-1);dao.insertGpsPoint(GpsPoint(tripId=trip,timestamp=base+(45+p*5)*60000,latitude=r[0]+(r[2]-r[0])*f+bend,longitude=r[1]+(r[3]-r[1])*f+bend*.35,accuracy=8f))}
-   dao.upsertPlan(DailyPlacePlan(day,placeIds[1+i%(placeIds.size-1)],visited=true))
-  }
+  places.forEach{sample->val existing=dao.placeByName(sample.name);if(existing==null)dao.insertPlace(sample)else dao.updatePlace(existing.copy(type=sample.type,officialAddress=sample.officialAddress,latitude=sample.latitude,longitude=sample.longitude))}
  }
 }
 
