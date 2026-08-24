@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-and-deploy:
@@ -66,3 +68,19 @@ jobs:
               --upload-file "$file" \
               "ftp://${FTP_SERVER}/${relative}"
           done
+
+      - name: GitHub Pages csomag előkészítése
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: download-site
+
+  deploy-pages:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publikálás GitHub Pages-re
+        id: deployment
+        uses: actions/deploy-pages@v4
