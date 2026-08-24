@@ -30,7 +30,9 @@ download-site/apk/roadrecord-latest.apk
 
 ## Nethely publikálás
 
-A letöltőoldal HTTPS-címe: **https://sztankod.github.io/roadrecord/**
+A Nethely letöltőoldal címe: **http://roadrecord.widor.nhely.hu/**
+
+A GitHub Pages HTTPS-tartalék címe: **https://sztankod.github.io/roadrecord/**
 
 Az oldal GitHub Pages-en fut érvényes HTTPS-tanúsítvánnyal. A Nethely `/roadrecord/` könyvtára tartalékpéldányként továbbra is automatikusan frissül. A `roadrecord.widor.nhely.hu` egy ingyenes Nethely aldomain; a szolgáltató sem DNS-szerkesztést, sem külön TLS-tanúsítványt nem enged hozzá, ezért nem kapcsolható HTTPS-es egyedi domainként a GitHub Pageshez. Saját domainnel ez később megoldható.
 
