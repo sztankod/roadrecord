@@ -31,7 +31,19 @@ jobs:
       - name: Gradle jogosultság
         run: chmod +x gradlew
 
+      - name: Állandó APK-aláírókulcs előkészítése
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.ROADRECORD_SIGNING_KEY_BASE64 }}
+        run: |
+          test -n "$SIGNING_KEY_BASE64"
+          printf '%s' "$SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/roadrecord-signing.jks"
+
       - name: Telepíthető APK készítése
+        env:
+          ROADRECORD_KEYSTORE: ${{ runner.temp }}/roadrecord-signing.jks
+          ROADRECORD_STORE_PASSWORD: ${{ secrets.ROADRECORD_STORE_PASSWORD }}
+          ROADRECORD_KEY_ALIAS: ${{ secrets.ROADRECORD_KEY_ALIAS }}
+          ROADRECORD_KEY_PASSWORD: ${{ secrets.ROADRECORD_KEY_PASSWORD }}
         run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Verzió és letöltőfájlok előkészítése

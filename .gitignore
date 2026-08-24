@@ -1,5 +1,8 @@
 *.iml
 .gradle/
+.android/
+.kotlin/
+.codex-remote-attachments/
 .idea/
 local.properties
 **/build/

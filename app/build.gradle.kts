@@ -16,10 +16,24 @@ android {
         versionCode = 102
         versionName = "1.02"
     }
+    val stableKeystore = System.getenv("ROADRECORD_KEYSTORE")
+    signingConfigs {
+        if (!stableKeystore.isNullOrBlank()) {
+            create("stable") {
+                storeFile = file(stableKeystore)
+                storePassword = System.getenv("ROADRECORD_STORE_PASSWORD")
+                keyAlias = System.getenv("ROADRECORD_KEY_ALIAS")
+                keyPassword = System.getenv("ROADRECORD_KEY_PASSWORD")
+            }
+        }
+    }
     buildFeatures { compose = true; buildConfig = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     buildTypes {
-        debug { isDebuggable = true }
+        debug {
+            isDebuggable = true
+            signingConfigs.findByName("stable")?.let { signingConfig = it }
+        }
         release { isMinifyEnabled = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
