@@ -25,7 +25,10 @@ data class GpsPoint(@PrimaryKey(autoGenerate = true) val id: Long = 0, val tripI
 data class LocationPlace(@PrimaryKey(autoGenerate = true) val id: Long = 0, val type: PlaceType = PlaceType.CLIENT, val name: String, val officialAddress: String = "", val latitude: Double? = null, val longitude: Double? = null, val encryptedGateCode: String? = null, val photoPath: String? = null, val entrancePhotoPath: String? = null, val note: String = "", val recognitionRadiusMeters: Int = 150)
 
 @Entity(tableName = "daily_place_plans", primaryKeys = ["workDayId", "placeId"], foreignKeys = [ForeignKey(entity=WorkDay::class,parentColumns=["id"],childColumns=["workDayId"],onDelete=ForeignKey.CASCADE), ForeignKey(entity=LocationPlace::class,parentColumns=["id"],childColumns=["placeId"],onDelete=ForeignKey.CASCADE)], indices=[Index("placeId")])
-data class DailyPlacePlan(val workDayId: Long, val placeId: Long, val priority: Priority = Priority.NORMAL, val visited: Boolean = false, val sortHint: Int? = null)
+data class DailyPlacePlan(val workDayId: Long, val placeId: Long, val priority: Priority = Priority.NORMAL, val visited: Boolean = false, val sortHint: Int? = null, val lockedPosition: Int? = null)
+
+@Entity(tableName = "route_plan_configs", foreignKeys = [ForeignKey(entity=WorkDay::class,parentColumns=["id"],childColumns=["workDayId"],onDelete=ForeignKey.CASCADE)], indices=[Index("workDayId")])
+data class RoutePlanConfig(@PrimaryKey val workDayId:Long, val startPlaceId:Long?=null, val endPlaceId:Long?=null)
 
 @Entity(tableName = "place_visits", foreignKeys = [ForeignKey(entity=WorkDay::class,parentColumns=["id"],childColumns=["workDayId"],onDelete=ForeignKey.CASCADE), ForeignKey(entity=LocationPlace::class,parentColumns=["id"],childColumns=["placeId"],onDelete=ForeignKey.CASCADE)], indices=[Index("workDayId"),Index("placeId")])
 data class PlaceVisit(@PrimaryKey(autoGenerate=true) val id:Long=0,val workDayId:Long,val placeId:Long,val previousPlaceId:Long?=null,val nextPlaceId:Long?=null,val arrivalTime:Long?=null,val departureTime:Long?=null,val travelDurationMillis:Long?=null,val distanceMeters:Double?=null)

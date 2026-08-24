@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") fun observePlans(dayId:Long):Flow<List<DailyPlacePlan>>
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") suspend fun plansNow(dayId:Long):List<DailyPlacePlan>
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsertPlan(v:DailyPlacePlan)
+ @Query("UPDATE daily_place_plans SET visited=:visited WHERE workDayId=:dayId AND placeId=:placeId") suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)
  @Query("DELETE FROM daily_place_plans WHERE workDayId=:dayId AND placeId=:placeId") suspend fun deletePlan(dayId:Long,placeId:Long)
  @Insert suspend fun insertVisit(v:PlaceVisit):Long
  @Query("SELECT * FROM place_visits WHERE placeId=:placeId") fun observeVisits(placeId:Long):Flow<List<PlaceVisit>>
@@ -37,4 +38,6 @@ import kotlinx.coroutines.flow.Flow
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveSettings(v:AppSettings)
  @Query("SELECT COUNT(*) FROM work_days") suspend fun dayCount():Int
  @Query("SELECT COUNT(*) FROM gps_points WHERE latitude >= 47.70") suspend fun northernDemoPointCount():Int
+ @Query("SELECT * FROM route_plan_configs WHERE workDayId=:dayId") fun observeRouteConfig(dayId:Long):Flow<RoutePlanConfig?>
+ @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveRouteConfig(v:RoutePlanConfig)
 }

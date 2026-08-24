@@ -21,6 +21,10 @@ class RoadRecordRepository(private val dao:RoadRecordDao){
  suspend fun deletePlace(v:LocationPlace)=dao.deletePlace(v)
  suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){if(selected)dao.upsertPlan(DailyPlacePlan(dayId,placeId))else dao.deletePlan(dayId,placeId)}
  suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>){val plans=dao.plansNow(dayId).associateBy{it.placeId};placeIds.forEachIndexed{i,id->plans[id]?.let{dao.upsertPlan(it.copy(sortHint=i))}}}
+ suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?){dao.plansNow(dayId).firstOrNull{it.placeId==placeId}?.let{dao.upsertPlan(it.copy(lockedPosition=position))}}
+ suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited)
+ fun routeConfig(dayId:Long)=dao.observeRouteConfig(dayId)
+ suspend fun saveRouteConfig(v:RoutePlanConfig)=dao.saveRouteConfig(v)
  suspend fun setImportant(p:DailyPlacePlan)=dao.upsertPlan(p.copy(priority=if(p.priority==Priority.NORMAL)Priority.IMPORTANT else Priority.NORMAL))
  suspend fun closePeriod(date:String){val p=dao.activePeriod()?:return;dao.updatePeriod(p.copy(endDate=date,closedAt=System.currentTimeMillis()));dao.insertPeriod(WorkPeriod(startDate=LocalDate.parse(date).plusDays(1).toString()))}
  suspend fun addGpsPoint(v:GpsPoint)=dao.insertGpsPoint(v)
