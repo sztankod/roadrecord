@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.Flow
  @Update suspend fun updatePlace(v:LocationPlace)
  @Delete suspend fun deletePlace(v:LocationPlace)
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") fun observePlans(dayId:Long):Flow<List<DailyPlacePlan>>
+ @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") suspend fun plansNow(dayId:Long):List<DailyPlacePlan>
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsertPlan(v:DailyPlacePlan)
  @Query("DELETE FROM daily_place_plans WHERE workDayId=:dayId AND placeId=:placeId") suspend fun deletePlan(dayId:Long,placeId:Long)
  @Insert suspend fun insertVisit(v:PlaceVisit):Long

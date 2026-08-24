@@ -20,6 +20,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao){
  suspend fun savePlace(v:LocationPlace)=if(v.id==0L)dao.insertPlace(v) else {dao.updatePlace(v);v.id}
  suspend fun deletePlace(v:LocationPlace)=dao.deletePlace(v)
  suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){if(selected)dao.upsertPlan(DailyPlacePlan(dayId,placeId))else dao.deletePlan(dayId,placeId)}
+ suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>){val plans=dao.plansNow(dayId).associateBy{it.placeId};placeIds.forEachIndexed{i,id->plans[id]?.let{dao.upsertPlan(it.copy(sortHint=i))}}}
  suspend fun setImportant(p:DailyPlacePlan)=dao.upsertPlan(p.copy(priority=if(p.priority==Priority.NORMAL)Priority.IMPORTANT else Priority.NORMAL))
  suspend fun closePeriod(date:String){val p=dao.activePeriod()?:return;dao.updatePeriod(p.copy(endDate=date,closedAt=System.currentTimeMillis()));dao.insertPeriod(WorkPeriod(startDate=LocalDate.parse(date).plusDays(1).toString()))}
  suspend fun addGpsPoint(v:GpsPoint)=dao.insertGpsPoint(v)
@@ -51,9 +52,10 @@ class RoadRecordRepository(private val dao:RoadRecordDao){
    LocationPlace(name="Kányakapu Csemege",officialAddress="1116 Budapest, Budaörsi út 115.",latitude=47.4672293,longitude=19.0164961),
    LocationPlace(name="Sasadi Csemege",officialAddress="1118 Budapest, Sasadi út 83.",latitude=47.47343,longitude=19.0082498),
    LocationPlace(name="Sárkányölő öregotthon",officialAddress="2624 Szokolya, Fő út 44–46.",latitude=47.8680547,longitude=19.0058502),
-   LocationPlace(name="Buzik",officialAddress="1065 Budapest, Nagymező utca 64.",latitude=47.5060452,longitude=19.0560832)
+   LocationPlace(name="Buzik",officialAddress="1065 Budapest, Nagymező utca 64.",latitude=47.5060452,longitude=19.0560832),
+   LocationPlace(type=PlaceType.BAKERY,name="Vekni pékség",officialAddress="2624 Szokolya, Fő út 110.",latitude=47.8705247,longitude=19.00066,note="Home – a napi túraterv fix kiindulási és érkezési pontja")
   )
-  val placeIds=places.map{sample->val existing=dao.placeByName(sample.name);if(existing==null)dao.insertPlace(sample)else{dao.updatePlace(existing.copy(type=PlaceType.CLIENT,officialAddress=sample.officialAddress,latitude=sample.latitude,longitude=sample.longitude));existing.id}}
+  val placeIds=places.map{sample->val existing=dao.placeByName(sample.name);if(existing==null)dao.insertPlace(sample)else{dao.updatePlace(existing.copy(type=sample.type,officialAddress=sample.officialAddress,latitude=sample.latitude,longitude=sample.longitude));existing.id}}
   if(dao.northernDemoPointCount()>0)return
   val routes=listOf(
    doubleArrayOf(47.5518,19.0732,47.7759,19.1360),doubleArrayOf(47.7759,19.1360,47.8685,19.0090),

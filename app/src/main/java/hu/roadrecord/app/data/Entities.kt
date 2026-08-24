@@ -3,7 +3,7 @@ package hu.roadrecord.app.data
 import androidx.room.*
 
 enum class EventType { WORK_START, TRIP_START, TRIP_END, WORK_END }
-enum class PlaceType { HOME, CLIENT }
+enum class PlaceType { HOME, CLIENT, BAKERY }
 enum class Priority { NORMAL, IMPORTANT }
 
 @Entity(tableName = "work_periods")
