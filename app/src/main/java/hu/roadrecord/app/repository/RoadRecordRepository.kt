@@ -26,15 +26,34 @@ class RoadRecordRepository(private val dao:RoadRecordDao){
  suspend fun activeTrip(dayId:Long)=dao.activeTrip(dayId)
  suspend fun seedDemo(){
   ensureDefaults();val period=dao.activePeriod()!!
+  listOf("Budapesti telephely","Váci partner","Szokolyai ügyfél","Verőcei megálló","Kismarosi partner","Nagymarosi ügyfél").forEach{name->dao.placeByName(name)?.let{dao.deletePlace(it)}}
   val places=listOf(
-   LocationPlace(type=PlaceType.HOME,name="Budapesti telephely",officialAddress="1138 Budapest, Váci út 168.",latitude=47.5518,longitude=19.0732,note="Napi indulási és érkezési pont"),
-   LocationPlace(name="Váci partner",officialAddress="2600 Vác, Március 15. tér 11.",latitude=47.7759,longitude=19.1360,note="Belvárosi lerakóhely"),
-   LocationPlace(name="Szokolyai ügyfél",officialAddress="2624 Szokolya, Fő utca 13.",latitude=47.8685,longitude=19.0090,note="Kapubejáró a Fő utca felől"),
-   LocationPlace(name="Verőcei megálló",officialAddress="2621 Verőce, Árpád út 40.",latitude=47.8245,longitude=19.0343,note="Dunapart felőli bejárat"),
-   LocationPlace(name="Kismarosi partner",officialAddress="2623 Kismaros, Kossuth Lajos út 22.",latitude=47.8376,longitude=18.9858,note="Recepción jelentkezni"),
-   LocationPlace(name="Nagymarosi ügyfél",officialAddress="2626 Nagymaros, Fő tér 5.",latitude=47.7887,longitude=18.9598,note="Rakodóhely az udvarban")
+   LocationPlace(name="Kismaros CBA",officialAddress="2623 Kismaros, Szokolyai út 3.",latitude=47.8263645,longitude=19.0133502),
+   LocationPlace(name="Verőce CBA",officialAddress="2621 Verőce, Rákóczi út 33.",latitude=47.8251062,longitude=19.0357996),
+   LocationPlace(name="Kis-Vác CBA",officialAddress="2600 Vác, Árpád út 87.",latitude=47.7911684,longitude=19.1170618),
+   LocationPlace(name="Deákvári Főtér CBA",officialAddress="2600 Vác, Deákvári főtér 31.",latitude=47.7911285,longitude=19.1343748),
+   LocationPlace(name="Újdeákvár CBA",officialAddress="2600 Vác, Radnóti Miklós út 9.",latitude=47.7946239,longitude=19.1284689),
+   LocationPlace(name="Tizes CBA",officialAddress="2600 Vác, Széchenyi utca 9–11.",latitude=47.7794831,longitude=19.1295676),
+   LocationPlace(name="Földváry CBA",officialAddress="2600 Vác, Kölcsey Ferenc utca 1.",latitude=47.7715718,longitude=19.1427245),
+   LocationPlace(name="Nagymaros CBA",officialAddress="2626 Nagymaros, Magyar utca 21.",latitude=47.7904,longitude=18.9594),
+   LocationPlace(name="Faludy Family",officialAddress="2627 Zebegény, Kossuth Lajos út 14.",latitude=47.8028199,longitude=18.9129961),
+   LocationPlace(name="Kővér és Hal",officialAddress="2627 Zebegény, Kossuth Lajos út 2. (Mókus Söröző)",latitude=47.8016126,longitude=18.9116356),
+   LocationPlace(name="Ipolygyöngye CBA",officialAddress="2635 Vámosmikola, Kossuth Lajos utca 4.",latitude=47.9782645,longitude=18.785902),
+   LocationPlace(name="Zöld Paradicsom",officialAddress="2625 Kóspallag, Kálvária utca 6.",latitude=47.8799485,longitude=18.9319907),
+   LocationPlace(name="Malomkert Fogadó",officialAddress="2628 Szob, Malomkert telep 09/8 hrsz.",latitude=47.8348025,longitude=18.8534678),
+   LocationPlace(name="Saját bolt",officialAddress="1048 Budapest, Bőröndös utca 6.",latitude=47.5844316,longitude=19.1133149),
+   LocationPlace(name="Kárpát Csemege",officialAddress="1133 Budapest, Dráva utca 22.",latitude=47.5256912,longitude=19.0576618),
+   LocationPlace(name="Törökvészi Csemege",officialAddress="1025 Budapest, Törökvészi út 1/B.",latitude=47.5203253,longitude=19.0220787),
+   LocationPlace(name="Mágnáskert Csemege",officialAddress="1025 Budapest, Csatárka út 58.",latitude=47.5298368,longitude=19.0099584),
+   LocationPlace(name="Zugligeti Csemege",officialAddress="1121 Budapest, Zugligeti út 58.",latitude=47.5176752,longitude=18.9820225),
+   LocationPlace(name="Szarvas Csemege",officialAddress="1125 Budapest, Szarvas Gábor út 8.",latitude=47.5128487,longitude=18.9945114),
+   LocationPlace(name="Naphegy Csemege",officialAddress="1016 Budapest, Naphegy tér 3.",latitude=47.49287,longitude=19.031965),
+   LocationPlace(name="Kányakapu Csemege",officialAddress="1116 Budapest, Budaörsi út 115.",latitude=47.4672293,longitude=19.0164961),
+   LocationPlace(name="Sasadi Csemege",officialAddress="1118 Budapest, Sasadi út 83.",latitude=47.47343,longitude=19.0082498),
+   LocationPlace(name="Sárkányölő öregotthon",officialAddress="2624 Szokolya, Fő út 44–46.",latitude=47.8680547,longitude=19.0058502),
+   LocationPlace(name="Buzik",officialAddress="1065 Budapest, Nagymező utca 64.",latitude=47.5060452,longitude=19.0560832)
   )
-  val placeIds=places.map{dao.placeByName(it.name)?.id?:dao.insertPlace(it)}
+  val placeIds=places.map{sample->val existing=dao.placeByName(sample.name);if(existing==null)dao.insertPlace(sample)else{dao.updatePlace(existing.copy(type=PlaceType.CLIENT,officialAddress=sample.officialAddress,latitude=sample.latitude,longitude=sample.longitude));existing.id}}
   if(dao.northernDemoPointCount()>0)return
   val routes=listOf(
    doubleArrayOf(47.5518,19.0732,47.7759,19.1360),doubleArrayOf(47.7759,19.1360,47.8685,19.0090),
