@@ -13,8 +13,8 @@ android {
         applicationId = "hu.roadrecord.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 109
-        versionName = "1.07"
+        versionCode = 110
+        versionName = "1.08"
     }
     val stableKeystore = System.getenv("ROADRECORD_KEYSTORE")
     signingConfigs {
@@ -24,6 +24,10 @@ android {
                 storePassword = System.getenv("ROADRECORD_STORE_PASSWORD")
                 keyAlias = System.getenv("ROADRECORD_KEY_ALIAS")
                 keyPassword = System.getenv("ROADRECORD_KEY_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
             }
         }
     }
@@ -34,7 +38,7 @@ android {
             isDebuggable = true
             signingConfigs.findByName("stable")?.let { signingConfig = it }
         }
-        release { isMinifyEnabled = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") }
+        release { isDebuggable = false; isMinifyEnabled = false; signingConfigs.findByName("stable")?.let { signingConfig = it }; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

@@ -1,1 +1,1 @@
-<full-backup-content><include domain="database" path="."/><exclude domain="file" path="place_photos/"/></full-backup-content>
+<full-backup-content><include domain="database" path="."/></full-backup-content>

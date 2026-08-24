@@ -1,1 +1,1 @@
-<data-extraction-rules><cloud-backup><include domain="database" path="."/><exclude domain="file" path="place_photos/"/></cloud-backup><device-transfer><include domain="root" path="."/></device-transfer></data-extraction-rules>
+<data-extraction-rules><cloud-backup><include domain="database" path="."/></cloud-backup><device-transfer><include domain="root" path="."/></device-transfer></data-extraction-rules>

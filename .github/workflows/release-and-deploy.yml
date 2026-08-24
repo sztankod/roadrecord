@@ -44,17 +44,15 @@ jobs:
           ROADRECORD_STORE_PASSWORD: ${{ secrets.ROADRECORD_STORE_PASSWORD }}
           ROADRECORD_KEY_ALIAS: ${{ secrets.ROADRECORD_KEY_ALIAS }}
           ROADRECORD_KEY_PASSWORD: ${{ secrets.ROADRECORD_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleDebug --no-daemon
+        run: ./gradlew :app:assembleRelease --no-daemon
 
       - name: Verzió és letöltőfájlok előkészítése
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
-            VERSION="1.02"
-          fi
-          cp app/build/outputs/apk/debug/app-debug.apk download-site/apk/roadrecord-latest.apk
-          cp app/build/outputs/apk/debug/app-debug.apk "download-site/apk/roadrecord-v${VERSION}.apk"
+          VERSION="$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n1)"
+          test -n "$VERSION"
+          cp app/build/outputs/apk/release/app-release.apk download-site/apk/roadrecord-latest.apk
+          cp app/build/outputs/apk/release/app-release.apk "download-site/apk/roadrecord-v${VERSION}.apk"
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: APK hozzáadása a GitHub kiadáshoz
