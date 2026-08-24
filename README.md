@@ -24,7 +24,7 @@ Android Studio Hedgehog vagy újabb, JDK 17 és Android SDK 35 szükséges.
 A debug APK helye: `app/build/outputs/apk/debug/app-debug.apk`. A release APK helye: `app/build/outputs/apk/release/app-release-unsigned.apk`. Publikáláshoz az APK-t alá kell írni, majd másolni:
 
 ```text
-download-site/apk/roadrecord-v0.1.0.apk
+download-site/apk/roadrecord-v1.02.apk
 download-site/apk/roadrecord-latest.apk
 ```
 
