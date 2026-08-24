@@ -31,6 +31,6 @@ data class DailyPlacePlan(val workDayId: Long, val placeId: Long, val priority: 
 data class PlaceVisit(@PrimaryKey(autoGenerate=true) val id:Long=0,val workDayId:Long,val placeId:Long,val previousPlaceId:Long?=null,val nextPlaceId:Long?=null,val arrivalTime:Long?=null,val departureTime:Long?=null,val travelDurationMillis:Long?=null,val distanceMeters:Double?=null)
 
 @Entity(tableName = "app_settings")
-data class AppSettings(@PrimaryKey val id:Int=1,val hourlyRate:Long=4500,val includeTravelInEarnings:Boolean=true,val automaticPlaceRecognition:Boolean=false,val reportEmail:String="",val reportFrequency:String="PERIOD_CLOSE",val automaticReports:Boolean=false)
+data class AppSettings(@PrimaryKey val id:Int=1,val hourlyRate:Long=4500,val includeTravelInEarnings:Boolean=true,val automaticPlaceRecognition:Boolean=false,val reportEmail:String="",val reportFrequency:String="PERIOD_CLOSE",val automaticReports:Boolean=false,val showWorkTime:Boolean=true,val showTravelTime:Boolean=true,val showEarnings:Boolean=true)
 
 data class DayWithEvents(@Embedded val day: WorkDay, @Relation(parentColumn="id",entityColumn="workDayId") val events:List<WorkEvent>, @Relation(parentColumn="id",entityColumn="workDayId") val trips:List<Trip>)

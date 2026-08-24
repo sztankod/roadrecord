@@ -13,7 +13,7 @@ class MainViewModel(app:Application):AndroidViewModel(app){
  val places=repo.places.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val periods=repo.periods.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  private val _message=MutableStateFlow<String?>(null);val message=_message.asStateFlow()
- init{viewModelScope.launch{repo.ensureDefaults()}}
+ init{viewModelScope.launch{repo.ensureDefaults();repo.seedDemo()}}
  fun run(block:suspend()->Unit)=viewModelScope.launch{try{block()}catch(e:Exception){_message.value=e.message?:"Ismeretlen hiba"}}
  fun clearMessage(){_message.value=null}
 }

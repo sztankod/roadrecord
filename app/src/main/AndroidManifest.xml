@@ -13,9 +13,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@drawable/roadrecord_logo"
         android:label="RoadRecord"
-        android:roundIcon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/roadrecord_logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.RoadRecord">
         <activity android:name=".MainActivity" android:exported="true">
