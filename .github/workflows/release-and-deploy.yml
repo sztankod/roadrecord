@@ -78,7 +78,7 @@ jobs:
             curl --fail --silent --show-error --ftp-create-dirs \
               --user "$FTP_USERNAME:$FTP_PASSWORD" \
               --upload-file "$file" \
-              "ftp://${FTP_SERVER}/roadrecord/${relative}"
+              "ftp://${FTP_SERVER}/${relative}"
           done
 
       - name: GitHub Pages csomag előkészítése
