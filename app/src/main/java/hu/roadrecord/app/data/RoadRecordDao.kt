@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
  @Insert suspend fun insertGpsPoint(v:GpsPoint)
  @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp") fun observePoints(tripId:Long):Flow<List<GpsPoint>>
  @Query("SELECT * FROM places ORDER BY type,name") fun observePlaces():Flow<List<LocationPlace>>
+ @Query("SELECT * FROM places WHERE name=:name LIMIT 1") suspend fun placeByName(name:String):LocationPlace?
  @Query("SELECT * FROM places WHERE id=:id") suspend fun place(id:Long):LocationPlace?
  @Insert suspend fun insertPlace(v:LocationPlace):Long
  @Update suspend fun updatePlace(v:LocationPlace)
