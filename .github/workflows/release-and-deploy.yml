@@ -1,4 +1,5 @@
 name: RoadRecord build and Nethely deploy
+# A master az alapértelmezett ág; a workflow kézzel és verziótaggal is indítható.
 
 on:
   workflow_dispatch:
