@@ -36,7 +36,7 @@ A `download-site` teljes tartalma közvetlenül feltölthető a domainhez tartoz
 
 ### Automatikus GitHub → Nethely frissítés
 
-A `.github/workflows/release-and-deploy.yml` workflow minden `v*` tag pushakor és kézi indításkor elkészíti az APK-t, létrehozza a verziózott és `roadrecord-latest.apk` fájlt, majd a kizárólag `/roadrecord/` mappára korlátozott FTP-fiókon keresztül feltölti az oldalt. A GitHub repository **Settings → Secrets and variables → Actions** részén ezek a titkok szükségesek:
+A `.github/workflows/release-and-deploy.yml` workflow minden `master` pushkor, minden `v*` tag pushakor és kézi indításkor elkészíti az APK-t, létrehozza a verziózott és `roadrecord-latest.apk` fájlt, majd a kizárólag `/roadrecord/` mappára korlátozott FTP-fiókon keresztül feltölti az oldalt. A GitHub repository **Settings → Secrets and variables → Actions** részén ezek a titkok szükségesek:
 
 - `NETHELY_FTP_SERVER`
 - `NETHELY_FTP_USERNAME`

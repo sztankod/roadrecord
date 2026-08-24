@@ -4,6 +4,8 @@ name: RoadRecord build and Nethely deploy
 on:
   workflow_dispatch:
   push:
+    branches:
+      - master
     tags:
       - "v*"
 
