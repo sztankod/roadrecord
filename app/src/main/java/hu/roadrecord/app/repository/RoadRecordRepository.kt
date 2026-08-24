@@ -24,14 +24,36 @@ class RoadRecordRepository(private val dao:RoadRecordDao){
  suspend fun closePeriod(date:String){val p=dao.activePeriod()?:return;dao.updatePeriod(p.copy(endDate=date,closedAt=System.currentTimeMillis()));dao.insertPeriod(WorkPeriod(startDate=LocalDate.parse(date).plusDays(1).toString()))}
  suspend fun addGpsPoint(v:GpsPoint)=dao.insertGpsPoint(v)
  suspend fun activeTrip(dayId:Long)=dao.activeTrip(dayId)
- suspend fun seedDemo(){ensureDefaults();val period=dao.activePeriod()!!;val placeIds=listOf(
-  LocationPlace(type=PlaceType.HOME,name="RoadRecord telephely",officialAddress="1117 Budapest, Budafoki út 56.",latitude=47.4686,longitude=19.0522,note="Napi indulási és érkezési pont"),
-  LocationPlace(name="GreenPartner Kft.",officialAddress="1033 Budapest, Fő tér 6.",latitude=47.5414,longitude=19.0450,encryptedGateCode="2580",note="Rakodás a bal oldali kapunál"),
-  LocationPlace(name="Metrodrom Kft.",officialAddress="1138 Budapest, Váci út 168.",latitude=47.5518,longitude=19.0732,note="Recepción jelentkezni"),
-  LocationPlace(name="Aranycipő Pékség",officialAddress="1094 Budapest, Ferenc tér 11.",latitude=47.4827,longitude=19.0701,note="Hátsó gazdasági bejárat"),
-  LocationPlace(name="Inventor Kft.",officialAddress="1106 Budapest, Maglódi út 14.",latitude=47.4899,longitude=19.1441,note="Ügyfélparkoló használható"),
-  LocationPlace(name="Logistic Pro Kft.",officialAddress="1211 Budapest, Szállító utca 4.",latitude=47.4358,longitude=19.0718,note="2-es porta")
- ).map{dao.placeByName(it.name)?.id?:dao.insertPlace(it)};if(dao.dayCount()>0)return;repeat(16){i->val daysAgo=(16-i).toLong();val date=LocalDate.now().minusDays(daysAgo);val day=dao.insertDay(WorkDay(periodId=period.id,date=date.toString()));val base=date.atTime(7+(i%2),35).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();dao.insertEvent(WorkEvent(workDayId=day,type=EventType.WORK_START,timestamp=base));val ts=dao.insertEvent(WorkEvent(workDayId=day,type=EventType.TRIP_START,timestamp=base+55*60000));val te=dao.insertEvent(WorkEvent(workDayId=day,type=EventType.TRIP_END,timestamp=base+(145+i%4*12)*60000));dao.insertEvent(WorkEvent(workDayId=day,type=EventType.WORK_END,timestamp=base+(8*60+20+i%3*15)*60000));val trip=dao.insertTrip(Trip(workDayId=day,startEventId=ts,endEventId=te,distanceMeters=86400.0+i*3800));repeat(12){p->dao.insertGpsPoint(GpsPoint(tripId=trip,timestamp=base+(55+p*7)*60000,latitude=47.4686+p*.004+(i%3)*.001,longitude=19.0522+p*.005,accuracy=9f))};val destination=placeIds[1+i%(placeIds.size-1)];dao.upsertPlan(DailyPlacePlan(day,destination,visited=true));dao.upsertPlan(DailyPlacePlan(day,placeIds.first(),visited=true))}}
+ suspend fun seedDemo(){
+  ensureDefaults();val period=dao.activePeriod()!!
+  val places=listOf(
+   LocationPlace(type=PlaceType.HOME,name="Budapesti telephely",officialAddress="1138 Budapest, Váci út 168.",latitude=47.5518,longitude=19.0732,note="Napi indulási és érkezési pont"),
+   LocationPlace(name="Váci partner",officialAddress="2600 Vác, Március 15. tér 11.",latitude=47.7759,longitude=19.1360,note="Belvárosi lerakóhely"),
+   LocationPlace(name="Szokolyai ügyfél",officialAddress="2624 Szokolya, Fő utca 13.",latitude=47.8685,longitude=19.0090,note="Kapubejáró a Fő utca felől"),
+   LocationPlace(name="Verőcei megálló",officialAddress="2621 Verőce, Árpád út 40.",latitude=47.8245,longitude=19.0343,note="Dunapart felőli bejárat"),
+   LocationPlace(name="Kismarosi partner",officialAddress="2623 Kismaros, Kossuth Lajos út 22.",latitude=47.8376,longitude=18.9858,note="Recepción jelentkezni"),
+   LocationPlace(name="Nagymarosi ügyfél",officialAddress="2626 Nagymaros, Fő tér 5.",latitude=47.7887,longitude=18.9598,note="Rakodóhely az udvarban")
+  )
+  val placeIds=places.map{dao.placeByName(it.name)?.id?:dao.insertPlace(it)}
+  if(dao.northernDemoPointCount()>0)return
+  val routes=listOf(
+   doubleArrayOf(47.5518,19.0732,47.7759,19.1360),doubleArrayOf(47.7759,19.1360,47.8685,19.0090),
+   doubleArrayOf(47.5518,19.0732,47.8245,19.0343),doubleArrayOf(47.8245,19.0343,47.8376,18.9858),
+   doubleArrayOf(47.5518,19.0732,47.8685,19.0090),doubleArrayOf(47.8685,19.0090,47.7887,18.9598),
+   doubleArrayOf(47.7759,19.1360,47.8376,18.9858),doubleArrayOf(47.7887,18.9598,47.5518,19.0732),
+   doubleArrayOf(47.8376,18.9858,47.5518,19.0732),doubleArrayOf(47.8245,19.0343,47.7759,19.1360)
+  )
+  routes.forEachIndexed{i,r->
+   val date=LocalDate.now().minusDays((10-i).toLong());val existing=dao.dayByDate(date.toString());val base=date.atTime(7+i%2,30).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+   val day=existing?.day?.id?:dao.insertDay(WorkDay(periodId=period.id,date=date.toString()))
+   val oldEvents=existing?.events?.sortedBy{it.timestamp}.orEmpty();val ts=oldEvents.firstOrNull{it.type==EventType.TRIP_START}?.id?:run{dao.insertEvent(WorkEvent(workDayId=day,type=EventType.WORK_START,timestamp=base));dao.insertEvent(WorkEvent(workDayId=day,type=EventType.TRIP_START,timestamp=base+45*60000))}
+   val te=oldEvents.firstOrNull{it.type==EventType.TRIP_END}?.id?:dao.insertEvent(WorkEvent(workDayId=day,type=EventType.TRIP_END,timestamp=base+135*60000))
+   if(oldEvents.none{it.type==EventType.WORK_END})dao.insertEvent(WorkEvent(workDayId=day,type=EventType.WORK_END,timestamp=base+8*60*60000))
+   val trip=dao.insertTrip(Trip(workDayId=day,startEventId=ts,endEventId=te,distanceMeters=28000.0+i*4200))
+   repeat(18){p->val f=p/17.0;val bend=kotlin.math.sin(Math.PI*f)*.012*((i%3)-1);dao.insertGpsPoint(GpsPoint(tripId=trip,timestamp=base+(45+p*5)*60000,latitude=r[0]+(r[2]-r[0])*f+bend,longitude=r[1]+(r[3]-r[1])*f+bend*.35,accuracy=8f))}
+   dao.upsertPlan(DailyPlacePlan(day,placeIds[1+i%(placeIds.size-1)],visited=true))
+  }
+ }
 }
 
 data class DaySummary(val workMillis:Long,val travelMillis:Long,val localMillis:Long,val distanceMeters:Double,val earnings:Long)

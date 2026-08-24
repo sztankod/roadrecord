@@ -35,4 +35,5 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM app_settings WHERE id=1") suspend fun settings():AppSettings?
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveSettings(v:AppSettings)
  @Query("SELECT COUNT(*) FROM work_days") suspend fun dayCount():Int
+ @Query("SELECT COUNT(*) FROM gps_points WHERE latitude >= 47.70") suspend fun northernDemoPointCount():Int
 }
