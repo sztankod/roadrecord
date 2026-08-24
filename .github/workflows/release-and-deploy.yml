@@ -1,0 +1,65 @@
+name: RoadRecord build and Nethely deploy
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Forráskód letöltése
+        uses: actions/checkout@v4
+
+      - name: JDK 17 beállítása
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Gradle jogosultság
+        run: chmod +x gradlew
+
+      - name: Telepíthető APK készítése
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Verzió és letöltőfájlok előkészítése
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            VERSION="0.1.0"
+          fi
+          cp app/build/outputs/apk/debug/app-debug.apk download-site/apk/roadrecord-latest.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "download-site/apk/roadrecord-v${VERSION}.apk"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: APK hozzáadása a GitHub kiadáshoz
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            download-site/apk/roadrecord-latest.apk
+            download-site/apk/roadrecord-v${{ env.VERSION }}.apk
+
+      - name: Feltöltés a Nethely roadrecord mappájába
+        env:
+          FTP_SERVER: ${{ secrets.NETHELY_FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.NETHELY_FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.NETHELY_FTP_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          find download-site -type f -print0 | while IFS= read -r -d '' file; do
+            relative="${file#download-site/}"
+            curl --fail --silent --show-error --ftp-create-dirs \
+              --user "$FTP_USERNAME:$FTP_PASSWORD" \
+              --upload-file "$file" \
+              "ftp://${FTP_SERVER}/${relative}"
+          done
