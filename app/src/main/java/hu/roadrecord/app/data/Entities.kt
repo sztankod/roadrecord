@@ -9,7 +9,7 @@ enum class Priority { NORMAL, IMPORTANT }
 @Entity(tableName = "work_periods")
 data class WorkPeriod(@PrimaryKey(autoGenerate = true) val id: Long = 0, val startDate: String, val endDate: String? = null, val closedAt: Long? = null)
 
-@Entity(tableName = "work_days", foreignKeys = [ForeignKey(entity = WorkPeriod::class, parentColumns = ["id"], childColumns = ["periodId"], onDelete = ForeignKey.RESTRICT)], indices = [Index("periodId"), Index(value=["date"], unique=true)])
+@Entity(tableName = "work_days", foreignKeys = [ForeignKey(entity = WorkPeriod::class, parentColumns = ["id"], childColumns = ["periodId"], onDelete = ForeignKey.RESTRICT)], indices = [Index("periodId"), Index("date")])
 data class WorkDay(@PrimaryKey(autoGenerate = true) val id: Long = 0, val periodId: Long, val date: String, val createdAt: Long = System.currentTimeMillis())
 
 @Entity(tableName = "work_events", foreignKeys = [ForeignKey(entity = WorkDay::class, parentColumns = ["id"], childColumns = ["workDayId"], onDelete = ForeignKey.CASCADE)], indices = [Index("workDayId")])
@@ -34,6 +34,6 @@ data class RoutePlanConfig(@PrimaryKey val workDayId:Long, val startPlaceId:Long
 data class PlaceVisit(@PrimaryKey(autoGenerate=true) val id:Long=0,val workDayId:Long,val placeId:Long,val previousPlaceId:Long?=null,val nextPlaceId:Long?=null,val arrivalTime:Long?=null,val departureTime:Long?=null,val travelDurationMillis:Long?=null,val distanceMeters:Double?=null)
 
 @Entity(tableName = "app_settings")
-data class AppSettings(@PrimaryKey val id:Int=1,val hourlyRate:Long=4500,val includeTravelInEarnings:Boolean=true,val automaticPlaceRecognition:Boolean=false,val reportEmail:String="",val reportFrequency:String="PERIOD_CLOSE",val automaticReports:Boolean=false,val showWorkTime:Boolean=true,val showTravelTime:Boolean=true,val showEarnings:Boolean=true,val dataResetVersion:Int=1)
+data class AppSettings(@PrimaryKey val id:Int=1,val hourlyRate:Long=4500,val includeTravelInEarnings:Boolean=true,val automaticPlaceRecognition:Boolean=false,val reportEmail:String="",val reportFrequency:String="PERIOD_CLOSE",val automaticReports:Boolean=false,val showWorkTime:Boolean=true,val showTravelTime:Boolean=true,val showEarnings:Boolean=true,val dataResetVersion:Int=1,val overnightRepairVersion:Int=1)
 
 data class DayWithEvents(@Embedded val day: WorkDay, @Relation(parentColumn="id",entityColumn="workDayId") val events:List<WorkEvent>, @Relation(parentColumn="id",entityColumn="workDayId") val trips:List<Trip>)

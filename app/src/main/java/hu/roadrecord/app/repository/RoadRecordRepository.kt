@@ -3,12 +3,22 @@ package hu.roadrecord.app.repository
 import hu.roadrecord.app.data.*
 import kotlinx.coroutines.flow.*
 import java.time.LocalDate
+import java.time.Instant
 
 class RoadRecordRepository(private val dao:RoadRecordDao){
  val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val settings=dao.observeSettings().map{it?:AppSettings()}
- suspend fun ensureDefaults(){val current=dao.settings();if(current==null)dao.saveSettings(AppSettings())else if(current.dataResetVersion<1){dao.clearAllWorkDays();dao.saveSettings(current.copy(dataResetVersion=1))};if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
- suspend fun activeDay()=dao.dayByDate(LocalDate.now().toString())
- suspend fun startWork(now:Long=System.currentTimeMillis()):Long { ensureDefaults(); val existing=activeDay(); if(existing!=null)return existing.day.id; val p=dao.activePeriod()?:error("Nincs aktív időszak"); val id=dao.insertDay(WorkDay(periodId=p.id,date=LocalDate.now().toString())); dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now)); return id }
+ suspend fun ensureDefaults(){val current=dao.settings();if(current==null)dao.saveSettings(AppSettings())else{var updated=current;if(updated.dataResetVersion<1){dao.clearAllWorkDays();updated=updated.copy(dataResetVersion=1)};if(updated.overnightRepairVersion<1){repairAugustOvernightSession();updated=updated.copy(overnightRepairVersion=1)};if(updated!=current)dao.saveSettings(updated)};if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
+ suspend fun activeDay()=dao.openDay()
+ suspend fun startWork(now:Long=System.currentTimeMillis()):Long { ensureDefaults(); val existing=activeDay(); if(existing!=null)return existing.day.id; val p=dao.activePeriod()?:error("Nincs aktív időszak"); val date=Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString();val id=dao.insertDay(WorkDay(periodId=p.id,date=date)); dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now)); return id }
+ private suspend fun repairAugustOvernightSession(){
+  val zone=java.time.ZoneId.systemDefault()
+  fun at(day:Int,hour:Int,minute:Int):Long = java.time.LocalDateTime.of(2026,8,day,hour,minute).atZone(zone).toInstant().toEpochMilli()
+  dao.deleteWorkDaysByDates(listOf("2026-08-24","2026-08-25"))
+  var period=dao.activePeriod()
+  if(period==null){dao.insertPeriod(WorkPeriod(startDate="2026-08-24"));period=dao.activePeriod()!!}
+  val id=dao.insertDay(WorkDay(periodId=period.id,date="2026-08-24",createdAt=at(24,22,0)))
+  addEvent(id,EventType.WORK_START,at(24,22,0));addEvent(id,EventType.TRIP_START,at(24,23,40));addEvent(id,EventType.TRIP_END,at(25,6,18));addEvent(id,EventType.WORK_END,at(25,6,46))
+ }
  suspend fun nextAction(dayId:Long,now:Long=System.currentTimeMillis()):EventType { val e=dao.events(dayId); val next=when(e.lastOrNull()?.type){null->EventType.WORK_START;EventType.WORK_START,EventType.TRIP_END->EventType.TRIP_START;EventType.TRIP_START->EventType.TRIP_END;EventType.WORK_END->throw IllegalStateException("A munkanap már lezárult")}; addEvent(dayId,next,now); return next }
  suspend fun endWork(dayId:Long,now:Long=System.currentTimeMillis()){addEvent(dayId,EventType.WORK_END,now)}
  suspend fun addEvent(dayId:Long,type:EventType,time:Long):Long { val candidate=dao.events(dayId)+WorkEvent(workDayId=dayId,type=type,timestamp=time); validate(candidate); val eventId=dao.insertEvent(WorkEvent(workDayId=dayId,type=type,timestamp=time)); when(type){EventType.TRIP_START->dao.insertTrip(Trip(workDayId=dayId,startEventId=eventId));EventType.TRIP_END->{dao.activeTrip(dayId)?.let{dao.updateTrip(it.copy(endEventId=eventId))}}else->Unit}; return eventId }
