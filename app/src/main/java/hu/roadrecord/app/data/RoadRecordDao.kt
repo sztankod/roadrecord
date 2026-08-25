@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
  @Transaction @Query("SELECT * FROM work_days WHERE id=:id") fun observeDay(id:Long):Flow<DayWithEvents?>
  @Transaction @Query("SELECT * FROM work_days WHERE date=:date LIMIT 1") suspend fun dayByDate(date:String):DayWithEvents?
  @Transaction @Query("SELECT * FROM work_days WHERE EXISTS (SELECT 1 FROM work_events e WHERE e.workDayId=work_days.id AND e.type='WORK_START') AND NOT EXISTS (SELECT 1 FROM work_events e WHERE e.workDayId=work_days.id AND e.type='WORK_END') ORDER BY createdAt DESC LIMIT 1") suspend fun openDay():DayWithEvents?
+ @Transaction @Query("SELECT * FROM work_days WHERE EXISTS (SELECT 1 FROM work_events e WHERE e.workDayId=work_days.id AND e.type='WORK_END') ORDER BY createdAt DESC LIMIT 1") suspend fun latestClosedDay():DayWithEvents?
  @Query("SELECT * FROM work_events WHERE workDayId=:dayId ORDER BY timestamp") suspend fun events(dayId:Long):List<WorkEvent>
  @Insert suspend fun insertPeriod(v:WorkPeriod):Long
  @Query("SELECT * FROM work_periods ORDER BY startDate DESC") fun observePeriods():Flow<List<WorkPeriod>>
@@ -43,5 +44,6 @@ import kotlinx.coroutines.flow.Flow
  @Query("DELETE FROM work_days") suspend fun clearAllWorkDays()
  @Query("DELETE FROM work_days WHERE date IN (:dates)") suspend fun deleteWorkDaysByDates(dates:List<String>)
  @Query("SELECT * FROM route_plan_configs WHERE workDayId=:dayId") fun observeRouteConfig(dayId:Long):Flow<RoutePlanConfig?>
+ @Query("SELECT * FROM route_plan_configs WHERE workDayId=:dayId") suspend fun routeConfigNow(dayId:Long):RoutePlanConfig?
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveRouteConfig(v:RoutePlanConfig)
 }
