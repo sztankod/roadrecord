@@ -13,8 +13,8 @@ android {
         applicationId = "hu.roadrecord.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 121
-        versionName = "1.19"
+        versionCode = 122
+        versionName = "1.20"
     }
     val stableKeystore = System.getenv("ROADRECORD_KEYSTORE")
     signingConfigs {
@@ -62,6 +62,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+    implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.exifinterface:exifinterface:1.3.7")

@@ -4,8 +4,10 @@ import hu.roadrecord.app.data.*
 import kotlinx.coroutines.flow.*
 import java.time.LocalDate
 import java.time.Instant
+import android.content.Context
+import hu.roadrecord.app.backup.BackupManager
 
-class RoadRecordRepository(private val dao:RoadRecordDao){
+class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Context){
  val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val settings=dao.observeSettings().map{it?:AppSettings()}
  suspend fun ensureDefaults(){val current=dao.settings();if(current==null)dao.saveSettings(AppSettings())else{var updated=current;if(updated.dataResetVersion<1){dao.clearAllWorkDays();updated=updated.copy(dataResetVersion=1)};if(updated.overnightRepairVersion<1){repairAugustOvernightSession();updated=updated.copy(overnightRepairVersion=1)};if(updated!=current)dao.saveSettings(updated)};if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
  suspend fun activeDay()=dao.openDay()
@@ -21,7 +23,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao){
  }
  suspend fun nextAction(dayId:Long,now:Long=System.currentTimeMillis()):EventType { val e=dao.events(dayId); val next=when(e.lastOrNull()?.type){null->EventType.WORK_START;EventType.WORK_START,EventType.TRIP_END->EventType.TRIP_START;EventType.TRIP_START->EventType.TRIP_END;EventType.WORK_END->throw IllegalStateException("A munkanap már lezárult")}; addEvent(dayId,next,now); return next }
  suspend fun endWork(dayId:Long,now:Long=System.currentTimeMillis()){addEvent(dayId,EventType.WORK_END,now)}
- suspend fun addEvent(dayId:Long,type:EventType,time:Long):Long { val candidate=dao.events(dayId)+WorkEvent(workDayId=dayId,type=type,timestamp=time); validate(candidate); val eventId=dao.insertEvent(WorkEvent(workDayId=dayId,type=type,timestamp=time)); when(type){EventType.TRIP_START->dao.insertTrip(Trip(workDayId=dayId,startEventId=eventId));EventType.TRIP_END->{dao.activeTrip(dayId)?.let{dao.updateTrip(it.copy(endEventId=eventId))}}else->Unit}; return eventId }
+ suspend fun addEvent(dayId:Long,type:EventType,time:Long):Long { val candidate=dao.events(dayId)+WorkEvent(workDayId=dayId,type=type,timestamp=time); validate(candidate); val eventId=dao.insertEvent(WorkEvent(workDayId=dayId,type=type,timestamp=time)); when(type){EventType.TRIP_START->dao.insertTrip(Trip(workDayId=dayId,startEventId=eventId));EventType.TRIP_END->{dao.activeTrip(dayId)?.let{dao.updateTrip(it.copy(endEventId=eventId))}}EventType.WORK_END->runCatching{BackupManager.create(context,automatic=true)};else->Unit}; return eventId }
  suspend fun updateEvent(event:WorkEvent){val list=dao.events(event.workDayId).map{if(it.id==event.id)event else it};validate(list);dao.updateEvent(event)}
  suspend fun deleteEvent(event:WorkEvent){dao.deleteEvent(event)}
  private fun validate(events:List<WorkEvent>){val sorted=events.sortedBy{it.timestamp}; if(sorted!=events.sortedBy{it.timestamp})Unit; var working=false;var travelling=false; sorted.forEach{when(it.type){EventType.WORK_START->{require(!working){"Már van munkakezdés"};working=true};EventType.TRIP_START->{require(working&&!travelling){"Indulás csak aktív munkában lehetséges"};travelling=true};EventType.TRIP_END->{require(travelling){"A visszaérkezés nem előzheti meg az indulást"};travelling=false};EventType.WORK_END->{require(working&&!travelling){"Munka vége csak visszaérkezés után rögzíthető"};working=false}}}}
