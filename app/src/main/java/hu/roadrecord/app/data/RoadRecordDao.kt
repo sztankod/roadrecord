@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM work_periods WHERE endDate IS NULL LIMIT 1") suspend fun activePeriod():WorkPeriod?
  @Update suspend fun updatePeriod(v:WorkPeriod)
  @Insert suspend fun insertDay(v:WorkDay):Long
+ @Query("DELETE FROM work_days WHERE id=:dayId") suspend fun deleteDay(dayId:Long)
  @Insert suspend fun insertEvent(v:WorkEvent):Long
  @Update suspend fun updateEvent(v:WorkEvent)
  @Delete suspend fun deleteEvent(v:WorkEvent)
