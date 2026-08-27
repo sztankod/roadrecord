@@ -3,7 +3,7 @@ package hu.roadrecord.app.data
 import androidx.room.*
 
 enum class EventType { WORK_START, TRIP_START, TRIP_END, WORK_END }
-enum class PlaceType { HOME, CLIENT, BAKERY }
+enum class PlaceType { HOME, CLIENT, BAKERY, FUEL }
 enum class Priority { NORMAL, IMPORTANT }
 
 @Entity(tableName = "work_periods")
@@ -34,6 +34,6 @@ data class RoutePlanConfig(@PrimaryKey val workDayId:Long, val startPlaceId:Long
 data class PlaceVisit(@PrimaryKey(autoGenerate=true) val id:Long=0,val workDayId:Long,val placeId:Long,val previousPlaceId:Long?=null,val nextPlaceId:Long?=null,val arrivalTime:Long?=null,val departureTime:Long?=null,val travelDurationMillis:Long?=null,val distanceMeters:Double?=null)
 
 @Entity(tableName = "app_settings")
-data class AppSettings(@PrimaryKey val id:Int=1,val hourlyRate:Long=4500,val includeTravelInEarnings:Boolean=true,val automaticPlaceRecognition:Boolean=false,val reportEmail:String="",val reportFrequency:String="PERIOD_CLOSE",val automaticReports:Boolean=false,val showWorkTime:Boolean=true,val showTravelTime:Boolean=true,val showEarnings:Boolean=true,val dataResetVersion:Int=1,val overnightRepairVersion:Int=1,val automaticBakeryTrips:Boolean=false,val currentPlaceId:Long?=null,val backupDriveTreeUri:String="",val backupWifiOnly:Boolean=true,val backupFrequency:String="EACH_WORK",val lastBackupAt:Long?=null)
+data class AppSettings(@PrimaryKey val id:Int=1,val hourlyRate:Long=4500,val includeTravelInEarnings:Boolean=true,val automaticPlaceRecognition:Boolean=false,val reportEmail:String="",val reportFrequency:String="PERIOD_CLOSE",val automaticReports:Boolean=false,val showWorkTime:Boolean=true,val showTravelTime:Boolean=true,val showEarnings:Boolean=true,val dataResetVersion:Int=1,val overnightRepairVersion:Int=1,val automaticBakeryTrips:Boolean=false,val currentPlaceId:Long?=null,val backupDriveTreeUri:String="",val backupWifiOnly:Boolean=true,val backupFrequency:String="EACH_WORK",val lastBackupAt:Long?=null,val historicalWorkImportVersion:Int=0)
 
 data class DayWithEvents(@Embedded val day: WorkDay, @Relation(parentColumn="id",entityColumn="workDayId") val events:List<WorkEvent>, @Relation(parentColumn="id",entityColumn="workDayId") val trips:List<Trip>)

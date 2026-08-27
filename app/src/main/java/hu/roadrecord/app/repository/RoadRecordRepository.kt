@@ -11,9 +11,14 @@ import android.content.Intent
 
 class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Context){
  val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val settings=dao.observeSettings().map{it?:AppSettings()}
- suspend fun ensureDefaults(){val current=dao.settings();if(current==null)dao.saveSettings(AppSettings())else{var updated=current;if(updated.dataResetVersion<1){dao.clearAllWorkDays();updated=updated.copy(dataResetVersion=1)};if(updated.overnightRepairVersion<1){repairAugustOvernightSession();updated=updated.copy(overnightRepairVersion=1)};if(updated!=current)dao.saveSettings(updated)};if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
+ suspend fun ensureDefaults(){val current=dao.settings()?:AppSettings().also{dao.saveSettings(it)};var updated=current;if(updated.dataResetVersion<1){dao.clearAllWorkDays();updated=updated.copy(dataResetVersion=1)};if(updated.overnightRepairVersion<1){repairAugustOvernightSession();updated=updated.copy(overnightRepairVersion=1)};if(updated.historicalWorkImportVersion<1){importAugustHistoricalWork();updated=updated.copy(historicalWorkImportVersion=1)};repairTripDistances();if(updated!=current)dao.saveSettings(updated);if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
  suspend fun activeDay()=dao.openDay()
- suspend fun startWork(now:Long=System.currentTimeMillis()):Long {ensureDefaults();val existing=activeDay();if(existing!=null)return existing.day.id;val previous=dao.latestClosedDay();val p=dao.activePeriod()?:error("Nincs aktív időszak");val date=Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString();val id=dao.insertDay(WorkDay(periodId=p.id,date=date));dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now));previous?.let{old->val copied=dao.plansNow(old.day.id).filter{val place=dao.place(it.placeId);place?.active==true&&place.type==PlaceType.CLIENT}.sortedBy{it.sortHint?:Int.MAX_VALUE};copied.forEachIndexed{index,plan->dao.upsertPlan(plan.copy(workDayId=id,visited=false,sortHint=index,lockedPosition=plan.lockedPosition?.let{index}))};dao.routeConfigNow(old.day.id)?.let{dao.saveRouteConfig(it.copy(workDayId=id))}};return id}
+ private fun workDate(timestamp:Long):String {
+  val local=Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.systemDefault())
+  val date=if(local.hour<2)local.toLocalDate().minusDays(1) else local.toLocalDate()
+  return date.toString()
+ }
+ suspend fun startWork(now:Long=System.currentTimeMillis()):Long {ensureDefaults();val existing=activeDay();if(existing!=null)return existing.day.id;val previous=dao.latestClosedDay();val p=dao.activePeriod()?:error("Nincs aktív időszak");val date=workDate(now);val id=dao.insertDay(WorkDay(periodId=p.id,date=date));dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now));previous?.let{old->dao.routeConfigNow(old.day.id)?.let{dao.saveRouteConfig(it.copy(workDayId=id))}};return id}
  private suspend fun repairAugustOvernightSession(){
   val zone=java.time.ZoneId.systemDefault()
   fun at(day:Int,hour:Int,minute:Int):Long = java.time.LocalDateTime.of(2026,8,day,hour,minute).atZone(zone).toInstant().toEpochMilli()
@@ -23,6 +28,13 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   val id=dao.insertDay(WorkDay(periodId=period.id,date="2026-08-24",createdAt=at(24,22,0)))
   addEvent(id,EventType.WORK_START,at(24,22,0));addEvent(id,EventType.TRIP_START,at(24,23,40));addEvent(id,EventType.TRIP_END,at(25,6,18));addEvent(id,EventType.WORK_END,at(25,6,46))
  }
+ private suspend fun importAugustHistoricalWork(){
+  val zone=java.time.ZoneId.systemDefault();fun at(day:Int,hour:Int,minute:Int)=java.time.LocalDateTime.of(2026,8,day,hour,minute).atZone(zone).toInstant().toEpochMilli()
+  val periodId=dao.insertPeriod(WorkPeriod(startDate="2026-08-14",endDate="2026-08-15",closedAt=System.currentTimeMillis()))
+  suspend fun work(workDate:String,start:Long,end:Long){val id=dao.insertDay(WorkDay(periodId=periodId,date=workDate,createdAt=start));dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=start));dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_END,timestamp=end))}
+  work("2026-08-14",at(15,0,45),at(15,8,30));work("2026-08-15",at(15,20,30),at(16,0,0))
+ }
+ private suspend fun repairTripDistances(){dao.allTrips().forEach{trip->val points=dao.gpsPointsNow(trip.id);var total=0.0;points.zipWithNext().forEach{(a,b)->val result=FloatArray(1);android.location.Location.distanceBetween(a.latitude,a.longitude,b.latitude,b.longitude,result);if(result[0] in 0f..1000f)total+=result[0]};if(kotlin.math.abs(total-trip.distanceMeters)>1.0)dao.updateTrip(trip.copy(distanceMeters=total))}}
  suspend fun nextAction(dayId:Long,now:Long=System.currentTimeMillis()):EventType { val e=dao.events(dayId); val next=when(e.lastOrNull()?.type){null->EventType.WORK_START;EventType.WORK_START,EventType.TRIP_END->EventType.TRIP_START;EventType.TRIP_START->EventType.TRIP_END;EventType.WORK_END->throw IllegalStateException("A munkanap már lezárult")}; addEvent(dayId,next,now); return next }
  suspend fun endWork(dayId:Long,now:Long=System.currentTimeMillis()){addEvent(dayId,EventType.WORK_END,now)}
  suspend fun addEvent(dayId:Long,type:EventType,time:Long):Long { val candidate=dao.events(dayId)+WorkEvent(workDayId=dayId,type=type,timestamp=time); validate(candidate); val eventId=dao.insertEvent(WorkEvent(workDayId=dayId,type=type,timestamp=time)); when(type){EventType.TRIP_START->dao.insertTrip(Trip(workDayId=dayId,startEventId=eventId));EventType.TRIP_END->{dao.activeTrip(dayId)?.let{dao.updateTrip(it.copy(endEventId=eventId))}}EventType.WORK_END->runCatching{BackupManager.create(context,automatic=true)};else->Unit}; return eventId }
@@ -33,7 +45,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
  suspend fun savePlace(v:LocationPlace)=if(v.id==0L)dao.insertPlace(v) else {dao.updatePlace(v);v.id}
  suspend fun deletePlace(v:LocationPlace)=dao.deletePlace(v)
- suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){if(selected)dao.upsertPlan(DailyPlacePlan(dayId,placeId))else dao.deletePlan(dayId,placeId)}
+ suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){if(selected){val existing=dao.plansNow(dayId);val learned=dao.previousPlan(placeId,dayId)?.lockedPosition;val occupied=existing.mapNotNull{it.lockedPosition}.toSet();val desired=learned?.coerceIn(0,existing.size);val position=desired?.let{target->(0..existing.size).filterNot{it in occupied}.minByOrNull{kotlin.math.abs(it-target)}};dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=position?:existing.size,lockedPosition=position))}else dao.deletePlan(dayId,placeId)}
  suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>){val plans=dao.plansNow(dayId).associateBy{it.placeId};placeIds.forEachIndexed{i,id->plans[id]?.let{dao.upsertPlan(it.copy(sortHint=i))}}}
  suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?){dao.plansNow(dayId).firstOrNull{it.placeId==placeId}?.let{dao.upsertPlan(it.copy(lockedPosition=position))}}
  suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited)
@@ -44,7 +56,8 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun saveRouteConfig(v:RoutePlanConfig)=dao.saveRouteConfig(v)
  suspend fun setImportant(p:DailyPlacePlan)=dao.upsertPlan(p.copy(priority=if(p.priority==Priority.NORMAL)Priority.IMPORTANT else Priority.NORMAL))
  suspend fun closePeriod(date:String){val p=dao.activePeriod()?:return;dao.updatePeriod(p.copy(endDate=date,closedAt=System.currentTimeMillis()));dao.insertPeriod(WorkPeriod(startDate=LocalDate.parse(date).plusDays(1).toString()))}
- suspend fun addGpsPoint(v:GpsPoint)=dao.insertGpsPoint(v)
+ suspend fun reopenLatestPeriod(){val active=dao.activePeriod()?:return;val closed=dao.observePeriods().first().filter{it.endDate!=null}.maxByOrNull{it.closedAt?:0}?:return;if(active.id!=closed.id){dao.movePeriodDays(active.id,closed.id);dao.deletePeriod(active)};dao.updatePeriod(closed.copy(endDate=null,closedAt=null))}
+ suspend fun addGpsPoint(v:GpsPoint){val previous=dao.lastGpsPoint(v.tripId);dao.insertGpsPoint(v);if(previous!=null){val result=FloatArray(1);android.location.Location.distanceBetween(previous.latitude,previous.longitude,v.latitude,v.longitude,result);val addition=result[0].toDouble();if(addition in 0.0..1000.0)dao.trip(v.tripId)?.let{dao.updateTrip(it.copy(distanceMeters=it.distanceMeters+addition))}}}
  suspend fun activeTrip(dayId:Long)=dao.activeTrip(dayId)
  suspend fun seedDemo(){
   ensureDefaults()

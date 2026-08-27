@@ -3,7 +3,7 @@ import android.content.Context
 import androidx.room.*
 import androidx.room.migration.Migration
 
-@Database(entities=[WorkPeriod::class,WorkDay::class,WorkEvent::class,Trip::class,GpsPoint::class,LocationPlace::class,DailyPlacePlan::class,PlaceVisit::class,AppSettings::class,RoutePlanConfig::class],version=10,exportSchema=true)
+@Database(entities=[WorkPeriod::class,WorkDay::class,WorkEvent::class,Trip::class,GpsPoint::class,LocationPlace::class,DailyPlacePlan::class,PlaceVisit::class,AppSettings::class,RoutePlanConfig::class],version=11,exportSchema=true)
 @TypeConverters(Converters::class)
 abstract class RoadRecordDatabase:RoomDatabase(){
  abstract fun dao():RoadRecordDao
@@ -17,7 +17,8 @@ abstract class RoadRecordDatabase:RoomDatabase(){
   private val MIGRATION_7_8=object:Migration(7,8){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE places ADD COLUMN active INTEGER NOT NULL DEFAULT 1");db.execSQL("UPDATE places SET recognitionRadiusMeters = 20")}}
   private val MIGRATION_8_9=object:Migration(8,9){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE places ADD COLUMN gpsManuallyConfirmed INTEGER NOT NULL DEFAULT 0")}}
   private val MIGRATION_9_10=object:Migration(9,10){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE app_settings ADD COLUMN backupDriveTreeUri TEXT NOT NULL DEFAULT ''");db.execSQL("ALTER TABLE app_settings ADD COLUMN backupWifiOnly INTEGER NOT NULL DEFAULT 1");db.execSQL("ALTER TABLE app_settings ADD COLUMN backupFrequency TEXT NOT NULL DEFAULT 'EACH_WORK'");db.execSQL("ALTER TABLE app_settings ADD COLUMN lastBackupAt INTEGER")}}
-  fun get(context:Context)=instance?:synchronized(this){instance?:Room.databaseBuilder(context.applicationContext,RoadRecordDatabase::class.java,"roadrecord.db").addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10).build().also{instance=it}}
+  private val MIGRATION_10_11=object:Migration(10,11){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE app_settings ADD COLUMN historicalWorkImportVersion INTEGER NOT NULL DEFAULT 0")}}
+  fun get(context:Context)=instance?:synchronized(this){instance?:Room.databaseBuilder(context.applicationContext,RoadRecordDatabase::class.java,"roadrecord.db").addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11).build().also{instance=it}}
   fun closeForRestore(){synchronized(this){instance?.close();instance=null}}
  }
 }

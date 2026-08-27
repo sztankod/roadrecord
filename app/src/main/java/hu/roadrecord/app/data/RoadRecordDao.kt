@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM work_periods ORDER BY startDate DESC") fun observePeriods():Flow<List<WorkPeriod>>
  @Query("SELECT * FROM work_periods WHERE endDate IS NULL LIMIT 1") suspend fun activePeriod():WorkPeriod?
  @Update suspend fun updatePeriod(v:WorkPeriod)
+ @Delete suspend fun deletePeriod(v:WorkPeriod)
+ @Query("SELECT COUNT(*) FROM work_days WHERE periodId=:periodId") suspend fun periodDayCount(periodId:Long):Int
+ @Query("UPDATE work_days SET periodId=:targetPeriodId WHERE periodId=:sourcePeriodId") suspend fun movePeriodDays(sourcePeriodId:Long,targetPeriodId:Long)
  @Insert suspend fun insertDay(v:WorkDay):Long
  @Query("DELETE FROM work_days WHERE id=:dayId") suspend fun deleteDay(dayId:Long)
  @Insert suspend fun insertEvent(v:WorkEvent):Long
@@ -22,6 +25,10 @@ import kotlinx.coroutines.flow.Flow
  @Update suspend fun updateTrip(v:Trip)
  @Query("SELECT * FROM trips WHERE workDayId=:dayId AND endEventId IS NULL LIMIT 1") suspend fun activeTrip(dayId:Long):Trip?
  @Insert suspend fun insertGpsPoint(v:GpsPoint)
+ @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp DESC LIMIT 1") suspend fun lastGpsPoint(tripId:Long):GpsPoint?
+ @Query("SELECT * FROM trips WHERE id=:tripId") suspend fun trip(tripId:Long):Trip?
+ @Query("SELECT * FROM trips") suspend fun allTrips():List<Trip>
+ @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp") suspend fun gpsPointsNow(tripId:Long):List<GpsPoint>
  @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp") fun observePoints(tripId:Long):Flow<List<GpsPoint>>
  @Query("SELECT * FROM places ORDER BY type,name") fun observePlaces():Flow<List<LocationPlace>>
  @Query("SELECT * FROM places WHERE name=:name LIMIT 1") suspend fun placeByName(name:String):LocationPlace?
@@ -31,6 +38,7 @@ import kotlinx.coroutines.flow.Flow
  @Delete suspend fun deletePlace(v:LocationPlace)
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") fun observePlans(dayId:Long):Flow<List<DailyPlacePlan>>
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") suspend fun plansNow(dayId:Long):List<DailyPlacePlan>
+ @Query("SELECT p.* FROM daily_place_plans p INNER JOIN work_days d ON d.id=p.workDayId WHERE p.placeId=:placeId AND p.workDayId!=:dayId ORDER BY d.createdAt DESC LIMIT 1") suspend fun previousPlan(placeId:Long,dayId:Long):DailyPlacePlan?
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsertPlan(v:DailyPlacePlan)
  @Query("UPDATE daily_place_plans SET visited=:visited WHERE workDayId=:dayId AND placeId=:placeId") suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)
  @Query("DELETE FROM daily_place_plans WHERE workDayId=:dayId AND placeId=:placeId") suspend fun deletePlan(dayId:Long,placeId:Long)
