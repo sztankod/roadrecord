@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <application
         android:name=".RoadRecordApplication"
         android:allowBackup="true"
@@ -25,6 +26,7 @@
             </intent-filter>
         </activity>
         <service android:name=".service.TrackingService" android:exported="false" android:foregroundServiceType="location" />
+        <service android:name=".service.NextStopOverlayService" android:exported="false" />
         <receiver android:name=".service.BootReceiver" android:enabled="true" android:exported="true">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>
