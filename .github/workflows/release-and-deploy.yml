@@ -50,9 +50,12 @@ jobs:
         shell: bash
         run: |
           VERSION="$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n1)"
-          test -n "$VERSION"
+          VERSION_CODE="$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts | head -n1)"
+          test -n "$VERSION" && test -n "$VERSION_CODE"
           cp app/build/outputs/apk/release/app-release.apk download-site/apk/roadrecord-latest.apk
           cp app/build/outputs/apk/release/app-release.apk "download-site/apk/roadrecord-v${VERSION}.apk"
+          printf '{"versionCode":%s,"versionName":"%s","apkUrl":"http://roadrecord.widor.nhely.hu/apk/roadrecord-v%s.apk"}\n' "$VERSION_CODE" "$VERSION" "$VERSION" > download-site/version.json
+          sed -i -E "s/roadrecord-v[0-9.]+\.apk/roadrecord-v${VERSION}.apk/g; s/RoadRecord APK · v[0-9.]+/RoadRecord APK · v${VERSION}/g" download-site/index.html
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: APK hozzáadása a GitHub kiadáshoz
