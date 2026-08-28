@@ -45,7 +45,31 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
  suspend fun savePlace(v:LocationPlace)=if(v.id==0L)dao.insertPlace(v) else {dao.updatePlace(v);v.id}
  suspend fun deletePlace(v:LocationPlace)=dao.deletePlace(v)
- suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){if(selected){val existing=dao.plansNow(dayId);val learned=dao.previousPlan(placeId,dayId)?.lockedPosition;val occupied=existing.mapNotNull{it.lockedPosition}.toSet();val desired=learned?.coerceIn(0,existing.size);val position=desired?.let{target->(0..existing.size).filterNot{it in occupied}.minByOrNull{kotlin.math.abs(it-target)}};dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=position?:existing.size,lockedPosition=position))}else dao.deletePlan(dayId,placeId)}
+ suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){
+  if(selected){val existing=dao.plansNow(dayId);dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=existing.size));reapplyPreviousLocks(dayId)}
+  else{dao.deletePlan(dayId,placeId);reapplyPreviousLocks(dayId)}
+ }
+ private suspend fun reapplyPreviousLocks(dayId:Long){
+  val previous=dao.previousDayPlans(dayId).sortedBy{it.sortHint?:Int.MAX_VALUE};if(previous.isEmpty())return
+  val current=dao.plansNow(dayId).sortedBy{it.sortHint?:Int.MAX_VALUE};if(current.isEmpty())return
+  val previousLocked=previous.filter{it.lockedPosition!=null};if(previousLocked.isEmpty())return
+  val suffixStart=(previous.size-previousLocked.size).coerceAtLeast(0)
+  val suffixIds=previousLocked.filter{(it.lockedPosition?:-1)>=suffixStart}.sortedBy{it.lockedPosition}.map{it.placeId}
+  val selectedSuffix=suffixIds.filter{id->current.any{it.placeId==id}}
+  val assigned=mutableMapOf<Long,Int>();selectedSuffix.forEachIndexed{i,id->assigned[id]=current.size-selectedSuffix.size+i}
+  val occupied=assigned.values.toMutableSet()
+  previousLocked.filter{it.placeId !in assigned}.sortedBy{it.lockedPosition}.forEach{old->
+   if(current.none{it.placeId==old.placeId})return@forEach
+   val desired=(old.lockedPosition?:return@forEach).coerceIn(0,current.lastIndex)
+   val free=(0..current.lastIndex).filterNot{it in occupied}.minByOrNull{kotlin.math.abs(it-desired)}?:return@forEach
+   assigned[old.placeId]=free;occupied+=free
+  }
+  val reordered=MutableList<DailyPlacePlan?>(current.size){null}
+  current.forEach{plan->assigned[plan.placeId]?.let{reordered[it]=plan}}
+  val free=current.filter{it.placeId !in assigned}.iterator()
+  reordered.indices.forEach{i->if(reordered[i]==null&&free.hasNext())reordered[i]=free.next()}
+  reordered.filterNotNull().forEachIndexed{i,plan->dao.upsertPlan(plan.copy(sortHint=i,lockedPosition=assigned[plan.placeId]))}
+ }
  suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>){val plans=dao.plansNow(dayId).associateBy{it.placeId};placeIds.forEachIndexed{i,id->plans[id]?.let{dao.upsertPlan(it.copy(sortHint=i))}}}
  suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?){dao.plansNow(dayId).firstOrNull{it.placeId==placeId}?.let{dao.upsertPlan(it.copy(lockedPosition=position))}}
  suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited)

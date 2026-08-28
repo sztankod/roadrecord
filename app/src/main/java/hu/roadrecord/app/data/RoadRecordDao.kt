@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") fun observePlans(dayId:Long):Flow<List<DailyPlacePlan>>
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") suspend fun plansNow(dayId:Long):List<DailyPlacePlan>
  @Query("SELECT p.* FROM daily_place_plans p INNER JOIN work_days d ON d.id=p.workDayId WHERE p.placeId=:placeId AND p.workDayId!=:dayId ORDER BY d.createdAt DESC LIMIT 1") suspend fun previousPlan(placeId:Long,dayId:Long):DailyPlacePlan?
+ @Query("SELECT p.* FROM daily_place_plans p WHERE p.workDayId=(SELECT d.id FROM work_days d WHERE d.id!=:dayId AND EXISTS (SELECT 1 FROM work_events e WHERE e.workDayId=d.id AND e.type='WORK_END') ORDER BY d.createdAt DESC LIMIT 1)") suspend fun previousDayPlans(dayId:Long):List<DailyPlacePlan>
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsertPlan(v:DailyPlacePlan)
  @Query("UPDATE daily_place_plans SET visited=:visited WHERE workDayId=:dayId AND placeId=:placeId") suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)
  @Query("UPDATE daily_place_plans SET closestApproachMeters=:distance WHERE workDayId=:dayId AND placeId=:placeId AND (closestApproachMeters IS NULL OR :distance<closestApproachMeters)") suspend fun recordClosestApproach(dayId:Long,placeId:Long,distance:Double)
