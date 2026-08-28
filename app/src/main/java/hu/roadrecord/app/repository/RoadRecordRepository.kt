@@ -71,7 +71,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   if(current!=null)dao.setPlanVisited(dayId,current.id,true)
   val activeVisit=dao.activeVisit(dayId)
   if(activeVisit?.placeId!=current?.id){
-   activeVisit?.let{visit->val arrival=visit.arrivalTime?:time;dao.updateVisit(visit.copy(departureTime=time,dwellDurationMillis=(time-arrival).coerceAtLeast(0)))}
+   activeVisit?.let{visit->val arrival=visit.arrivalTime?:time;val dwell=(time-arrival).coerceAtLeast(0);dao.updateVisit(visit.copy(departureTime=time,dwellDurationMillis=dwell));dao.place(visit.placeId)?.let{place->val samples=place.dwellSampleCount+1;val average=((place.averageDwellMillis.toDouble()*place.dwellSampleCount+dwell)/samples).toLong();dao.updatePlace(place.copy(averageDwellMillis=average,dwellSampleCount=samples))}}
    detection?.let{dao.insertVisit(PlaceVisit(workDayId=dayId,placeId=it.place.id,arrivalTime=time,distanceMeters=it.distanceMeters))}
   }
   dao.settings()?.let{if(it.currentPlaceId!=current?.id)dao.saveSettings(it.copy(currentPlaceId=current?.id))}
