@@ -49,8 +49,34 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>){val plans=dao.plansNow(dayId).associateBy{it.placeId};placeIds.forEachIndexed{i,id->plans[id]?.let{dao.upsertPlan(it.copy(sortHint=i))}}}
  suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?){dao.plansNow(dayId).firstOrNull{it.placeId==placeId}?.let{dao.upsertPlan(it.copy(lockedPosition=position))}}
  suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited)
- suspend fun nextPlannedStop(dayId:Long):LocationPlace?=dao.plansNow(dayId).filter{!it.visited}.sortedBy{it.sortHint?:Int.MAX_VALUE}.firstNotNullOfOrNull{dao.place(it.placeId)?.takeIf{place->place.active}}
- suspend fun recognizePlannedStops(dayId:Long,latitude:Double,longitude:Double,time:Long,accuracy:Float):LocationPlace?{var current:LocationPlace?=null;var currentDistance:Double?=null;dao.plansNow(dayId).forEach{plan->val place=dao.place(plan.placeId)?.takeIf{it.active}?:return@forEach;val lat=place.latitude?:return@forEach;val lon=place.longitude?:return@forEach;val earth=6371000.0;val dLat=Math.toRadians(lat-latitude);val dLon=Math.toRadians(lon-longitude);val a=kotlin.math.sin(dLat/2).let{it*it}+kotlin.math.cos(Math.toRadians(latitude))*kotlin.math.cos(Math.toRadians(lat))*kotlin.math.sin(dLon/2).let{it*it};val distance=2*earth*kotlin.math.atan2(kotlin.math.sqrt(a),kotlin.math.sqrt(1-a));if(distance<=place.recognitionRadiusMeters&&(currentDistance==null||distance<currentDistance!!)){current=place;currentDistance=distance;if(!plan.visited)dao.setPlanVisited(dayId,place.id,true)}};val activeVisit=dao.activeVisit(dayId);if(activeVisit?.placeId!=current?.id){activeVisit?.let{visit->val arrival=visit.arrivalTime?:time;dao.updateVisit(visit.copy(departureTime=time,dwellDurationMillis=(time-arrival).coerceAtLeast(0)))};current?.let{place->dao.insertVisit(PlaceVisit(workDayId=dayId,placeId=place.id,arrivalTime=time,distanceMeters=currentDistance))}};dao.settings()?.let{if(it.currentPlaceId!=current?.id)dao.saveSettings(it.copy(currentPlaceId=current?.id))};return current}
+ suspend fun nextPlannedStop(dayId:Long,excludePlaceId:Long?=null):LocationPlace?=dao.plansNow(dayId).filter{!it.visited&&it.placeId!=excludePlaceId}.sortedBy{it.sortHint?:Int.MAX_VALUE}.firstNotNullOfOrNull{dao.place(it.placeId)?.takeIf{place->place.active}}
+ suspend fun previewCurrentStop(placeId:Long){dao.settings()?.let{if(it.currentPlaceId!=placeId)dao.saveSettings(it.copy(currentPlaceId=placeId))}}
+ suspend fun detectPlannedStop(dayId:Long,latitude:Double,longitude:Double,accuracy:Float):StopDetection?{
+  var nearest:StopDetection?=null
+  dao.plansNow(dayId).forEach{plan->
+   val place=dao.place(plan.placeId)?.takeIf{it.active}?:return@forEach
+   val lat=place.latitude?:return@forEach;val lon=place.longitude?:return@forEach
+   val earth=6371000.0;val dLat=Math.toRadians(lat-latitude);val dLon=Math.toRadians(lon-longitude)
+   val a=kotlin.math.sin(dLat/2).let{it*it}+kotlin.math.cos(Math.toRadians(latitude))*kotlin.math.cos(Math.toRadians(lat))*kotlin.math.sin(dLon/2).let{it*it}
+   val distance=2*earth*kotlin.math.atan2(kotlin.math.sqrt(a),kotlin.math.sqrt(1-a))
+   dao.recordClosestApproach(dayId,place.id,distance)
+   val boundedAccuracy=accuracy.coerceIn(0f,30f).toDouble()
+   val threshold=if(place.gpsManuallyConfirmed)place.recognitionRadiusMeters+boundedAccuracy*.5 else maxOf(place.recognitionRadiusMeters,40)+boundedAccuracy*.25
+   if(distance<=threshold&&(nearest==null||distance<nearest!!.distanceMeters))nearest=StopDetection(place,distance,threshold)
+  }
+  return nearest
+ }
+ suspend fun applyStopDetection(dayId:Long,detection:StopDetection?,time:Long):LocationPlace?{
+  val current=detection?.place
+  if(current!=null)dao.setPlanVisited(dayId,current.id,true)
+  val activeVisit=dao.activeVisit(dayId)
+  if(activeVisit?.placeId!=current?.id){
+   activeVisit?.let{visit->val arrival=visit.arrivalTime?:time;dao.updateVisit(visit.copy(departureTime=time,dwellDurationMillis=(time-arrival).coerceAtLeast(0)))}
+   detection?.let{dao.insertVisit(PlaceVisit(workDayId=dayId,placeId=it.place.id,arrivalTime=time,distanceMeters=it.distanceMeters))}
+  }
+  dao.settings()?.let{if(it.currentPlaceId!=current?.id)dao.saveSettings(it.copy(currentPlaceId=current?.id))}
+  return current
+ }
  suspend fun bakeryPresence(latitude:Double,longitude:Double,accuracy:Float):Boolean?{if(dao.settings()?.automaticBakeryTrips!=true)return null;val place=dao.placeByName("Vekni pékség")?:return null;val lat=place.latitude?:return null;val lon=place.longitude?:return null;val earth=6371000.0;val dLat=Math.toRadians(lat-latitude);val dLon=Math.toRadians(lon-longitude);val a=kotlin.math.sin(dLat/2).let{it*it}+kotlin.math.cos(Math.toRadians(latitude))*kotlin.math.cos(Math.toRadians(lat))*kotlin.math.sin(dLon/2).let{it*it};val distance=2*earth*kotlin.math.atan2(kotlin.math.sqrt(a),kotlin.math.sqrt(1-a));return distance<=place.recognitionRadiusMeters+accuracy.coerceAtMost(35f)}
  suspend fun automaticBakeryTransition(dayId:Long,left:Boolean,time:Long){val last=dao.events(dayId).lastOrNull()?.type?:return;if(left&&(last==EventType.WORK_START||last==EventType.TRIP_END))addEvent(dayId,EventType.TRIP_START,time)else if(!left&&last==EventType.TRIP_START)addEvent(dayId,EventType.TRIP_END,time)}
  fun routeConfig(dayId:Long)=dao.observeRouteConfig(dayId)
@@ -94,5 +120,6 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  }
 }
 
+data class StopDetection(val place:LocationPlace,val distanceMeters:Double,val thresholdMeters:Double)
 data class DaySummary(val workMillis:Long,val travelMillis:Long,val localMillis:Long,val distanceMeters:Double,val earnings:Long)
 fun DayWithEvents.summary(settings:AppSettings,now:Long=System.currentTimeMillis()):DaySummary{val sorted=events.sortedBy{it.timestamp};val start=sorted.firstOrNull{it.type==EventType.WORK_START}?.timestamp;val end=sorted.lastOrNull{it.type==EventType.WORK_END}?.timestamp?:if(start!=null)now else null;val work=if(start!=null&&end!=null)(end-start).coerceAtLeast(0) else 0;var travel=0L;var tripStart:Long?=null;sorted.forEach{when(it.type){EventType.TRIP_START->tripStart=it.timestamp;EventType.TRIP_END->{tripStart?.let{s->travel+=(it.timestamp-s).coerceAtLeast(0)};tripStart=null}else->Unit}};if(tripStart!=null)travel+=(now-tripStart!!).coerceAtLeast(0);val paid=if(settings.includeTravelInEarnings)work else (work-travel).coerceAtLeast(0);return DaySummary(work,travel,(work-travel).coerceAtLeast(0),trips.sumOf{it.distanceMeters},paid*settings.hourlyRate/3600000)}
