@@ -76,7 +76,7 @@ private val Navy=Color(0xFF0D2B60);private val Blue=Color(0xFF1976D2);private va
 private val MunicipalityPalette=listOf(0xFF1565C0,0xFF2E7D32,0xFFEF6C00,0xFF6A1B9A,0xFF00838F,0xFFC62828,0xFF455A64,0xFFAD1457)
 private fun municipality(place:LocationPlace)=place.officialAddress.substringBefore(',').replace(Regex("^\\s*\\d{4}\\s+"),"").trim()
 private fun municipalityMap(json:String):Map<String,Long> = runCatching{val o=JSONObject(json.ifBlank{"{}"});o.keys().asSequence().associateWith{o.getLong(it)}}.getOrDefault(emptyMap())
-private fun municipalityColor(name:String,json:String):Color{val saved=municipalityMap(json)[name];val raw=saved?:MunicipalityPalette[(name.hashCode().toLong().absoluteValue%MunicipalityPalette.size).toInt()];return Color(raw.toULong())}
+private fun municipalityColor(name:String,json:String):Color{val saved=municipalityMap(json)[name];val raw=saved?:MunicipalityPalette[(name.hashCode().toLong().absoluteValue%MunicipalityPalette.size).toInt()];return Color(raw)}
 @Composable private fun MunicipalityBadge(place:LocationPlace,colors:String){val name=municipality(place);if(name.isNotBlank())Surface(color=municipalityColor(name,colors),shape=RoundedCornerShape(7.dp)){Text(name,color=Color.White,fontSize=10.sp,fontWeight=FontWeight.Bold,maxLines=1,modifier=Modifier.padding(horizontal=7.dp,vertical=4.dp))}}
 private val AppColors=lightColorScheme(primary=Blue,onPrimary=Color.White,secondary=Green,tertiary=Orange,background=Bg,surface=Color.White,onSurface=Navy)
 private enum class Tab(val label:String,val icon:ImageVector){TODAY("Ma",Icons.Default.Home),LOG("Napló",Icons.AutoMirrored.Filled.List),EARN("Kereset",Icons.Default.AccountBalanceWallet),STATS("Statisztika",Icons.Default.BarChart),SETTINGS("Beállítások",Icons.Default.Settings)}
@@ -104,7 +104,19 @@ private fun pinOverlayNext(context:Context,place:LocationPlace){context.startSer
 private fun openWaze(context:Context,place:LocationPlace,showOverlay:Boolean=true,current:LocationPlace?=null){if(showOverlay&&!android.provider.Settings.canDrawOverlays(context)){android.widget.Toast.makeText(context,"Engedélyezd a RoadRecord megjelenítését más alkalmazások felett, majd nyomd meg újra a Waze gombot.",android.widget.Toast.LENGTH_LONG).show();context.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return};if(showOverlay)context.startService(Intent(context,NextStopOverlayService::class.java).setAction(NextStopOverlayService.ACTION_SHOW).putExtra(NextStopOverlayService.EXTRA_CURRENT_NAME,current?.name?:"Úton").putExtra(NextStopOverlayService.EXTRA_CURRENT_ADDRESS,current?.officialAddress.orEmpty()).putExtra(NextStopOverlayService.EXTRA_NAME,place.name).putExtra(NextStopOverlayService.EXTRA_ADDRESS,place.officialAddress).putExtra(NextStopOverlayService.EXTRA_PIN_NEXT,true))else context.startService(Intent(context,NextStopOverlayService::class.java).setAction(NextStopOverlayService.ACTION_HIDE));val target=if(place.latitude!=null&&place.longitude!=null)"ll=${place.latitude},${place.longitude}" else "q=${Uri.encode(place.officialAddress.ifBlank{place.name})}";val app=Uri.parse("waze://?$target&navigate=yes");val web=Uri.parse("https://waze.com/ul?$target&navigate=yes");runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,app).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}.onFailure{context.startActivity(Intent(Intent.ACTION_VIEW,web).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}}
 private fun openRoute(context:Context,points:List<GpsPoint>){val first=points.firstOrNull()?:return;val last=points.lastOrNull()?:first;val url="https://www.google.com/maps/dir/?api=1&origin=${first.latitude},${first.longitude}&destination=${last.latitude},${last.longitude}&travelmode=driving";context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}
 private sealed interface UpdateResult{data class Available(val name:String,val url:String):UpdateResult;data object Current:UpdateResult;data object Failed:UpdateResult}
-private suspend fun checkLatestVersion():UpdateResult=withContext(Dispatchers.IO){runCatching{val connection=(URL("https://raw.githubusercontent.com/sztankod/roadrecord/master/download-site/version.json?${System.currentTimeMillis()}").openConnection() as HttpURLConnection).apply{connectTimeout=8000;readTimeout=8000;useCaches=false};val json=connection.inputStream.bufferedReader().use{JSONObject(it.readText())};val code=json.getInt("versionCode");if(code>BuildConfig.VERSION_CODE)UpdateResult.Available(json.getString("versionName"),json.getString("apkUrl"))else UpdateResult.Current}.getOrDefault(UpdateResult.Failed)}
+private suspend fun checkLatestVersion():UpdateResult=withContext(Dispatchers.IO){
+    val sources=listOf(
+        "https://sztankod.github.io/roadrecord/version.json",
+        "https://raw.githubusercontent.com/sztankod/roadrecord/master/download-site/version.json"
+    )
+    sources.firstNotNullOfOrNull{source->runCatching{
+        val separator=if('?' in source)'&' else '?'
+        val connection=(URL("$source${separator}check=${System.currentTimeMillis()}").openConnection() as HttpURLConnection).apply{connectTimeout=8000;readTimeout=8000;useCaches=false;setRequestProperty("Cache-Control","no-cache")}
+        val json=connection.inputStream.bufferedReader().use{JSONObject(it.readText())}
+        val code=json.getInt("versionCode")
+        if(code>BuildConfig.VERSION_CODE)UpdateResult.Available(json.getString("versionName"),json.getString("apkUrl"))else UpdateResult.Current
+    }.getOrNull()}?:UpdateResult.Failed
+}
 @Composable private fun VersionChecker(request:Int){val ctx=LocalContext.current;var result by remember{mutableStateOf<UpdateResult?>(null)};LaunchedEffect(request){result=null;result=checkLatestVersion()};when(val value=result){is UpdateResult.Available->AlertDialog(onDismissRequest={result=null},title={Text("Új RoadRecord verzió")},text={Text("Elérhető az ${value.name} verzió. Szeretnéd letölteni?")},confirmButton={TextButton({ctx.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(value.url)));result=null}){Text("Letöltés")}},dismissButton={TextButton({result=null}){Text("Később")}});UpdateResult.Current->if(request>0)AlertDialog(onDismissRequest={result=null},title={Text("Nincs új verzió")},text={Text("A legfrissebb, ${BuildConfig.VERSION_NAME} verziót használod.")},confirmButton={TextButton({result=null}){Text("Rendben")}});UpdateResult.Failed->if(request>0)AlertDialog(onDismissRequest={result=null},title={Text("Nem sikerült ellenőrizni")},text={Text("Ellenőrizd az internetkapcsolatot, majd próbáld újra.")},confirmButton={TextButton({result=null}){Text("Rendben")}});null->{}}}
 @Composable private fun LiveTick():Long{var n by remember{mutableLongStateOf(System.currentTimeMillis())};LaunchedEffect(Unit){while(true){delay(1000);n=System.currentTimeMillis()}};return n}
 private data class SummaryMetric(val label:String,val value:String,val color:Color,val icon:ImageVector)
@@ -172,7 +184,7 @@ private fun MunicipalityColorsDialog(
                                 val fallback=MunicipalityPalette[(name.hashCode().toLong().absoluteValue%MunicipalityPalette.size).toInt()]
                                 val selected=(colors[name]?:fallback)==raw
                                 Surface(
-                                    color=Color(raw.toULong()),
+                                    color=Color(raw),
                                     shape=CircleShape,
                                     border=if(selected)BorderStroke(3.dp,Navy) else null,
                                     modifier=Modifier.size(30.dp).clickable{colors=colors+(name to raw)}
