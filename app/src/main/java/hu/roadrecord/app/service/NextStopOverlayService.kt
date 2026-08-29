@@ -35,6 +35,7 @@ class NextStopOverlayService : Service() {
         const val EXTRA_ADDRESS = "address"
         const val EXTRA_CURRENT_NAME = "current_name"
         const val EXTRA_CURRENT_ADDRESS = "current_address"
+        const val EXTRA_PIN_NEXT = "pin_next"
 
         @Volatile
         var visible = false
@@ -67,10 +68,13 @@ class NextStopOverlayService : Service() {
     private var currentAddress = ""
     private var nextName = "Nincs további megálló"
     private var nextAddress = ""
+    private var pinnedNextName = ""
+    private var pinnedNextAddress = ""
 
     override fun onCreate() {
         super.onCreate()
         instance = this
+        restoreContent()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -109,15 +113,31 @@ class NextStopOverlayService : Service() {
     }
 
     private fun readContent(intent: Intent) {
-        intent.getStringExtra(EXTRA_CURRENT_NAME)?.let { currentName = it.ifBlank { "Úton" } }
+        val incomingCurrent = intent.getStringExtra(EXTRA_CURRENT_NAME)
+        if (pinnedNextName.isNotBlank() && incomingCurrent == pinnedNextName) {
+            pinnedNextName = ""
+            pinnedNextAddress = ""
+        }
+        incomingCurrent?.let { currentName = it.ifBlank { "Úton" } }
         intent.getStringExtra(EXTRA_CURRENT_ADDRESS)?.let { currentAddress = it }
-        intent.getStringExtra(EXTRA_NAME)?.let { nextName = it.ifBlank { "Nincs további megálló" } }
-        intent.getStringExtra(EXTRA_ADDRESS)?.let { nextAddress = it }
+        if (intent.getBooleanExtra(EXTRA_PIN_NEXT, false)) {
+            pinnedNextName = intent.getStringExtra(EXTRA_NAME).orEmpty()
+            pinnedNextAddress = intent.getStringExtra(EXTRA_ADDRESS).orEmpty()
+        }
+        if (pinnedNextName.isNotBlank()) {
+            nextName = pinnedNextName
+            nextAddress = pinnedNextAddress
+        } else {
+            intent.getStringExtra(EXTRA_NAME)?.let { nextName = it.ifBlank { "Nincs további megálló" } }
+            intent.getStringExtra(EXTRA_ADDRESS)?.let { nextAddress = it }
+        }
         prefs.edit()
             .putString("current_name", currentName)
             .putString("current_address", currentAddress)
             .putString("next_name", nextName)
             .putString("next_address", nextAddress)
+            .putString("pinned_next_name", pinnedNextName)
+            .putString("pinned_next_address", pinnedNextAddress)
             .apply()
     }
 
@@ -126,6 +146,8 @@ class NextStopOverlayService : Service() {
         currentAddress = prefs.getString("current_address", currentAddress) ?: currentAddress
         nextName = prefs.getString("next_name", nextName) ?: nextName
         nextAddress = prefs.getString("next_address", nextAddress) ?: nextAddress
+        pinnedNextName = prefs.getString("pinned_next_name", pinnedNextName) ?: pinnedNextName
+        pinnedNextAddress = prefs.getString("pinned_next_address", pinnedNextAddress) ?: pinnedNextAddress
     }
 
     private fun renderContent() {
@@ -168,10 +190,11 @@ class NextStopOverlayService : Service() {
         val current = stopColumn("JELENLEGI", currentNameView!!, currentAddressView!!)
         val next = stopColumn("KÖVETKEZŐ", nameView!!, addressView!!)
         val back = ImageButton(this).apply {
-            setImageResource(R.drawable.roadrecord_logo)
+            setImageResource(android.R.drawable.ic_menu_revert)
+            setColorFilter(Color.WHITE)
             background = GradientDrawable().apply {
                 setColor(0x33FFFFFF)
-                cornerRadius = 9 * density
+                shape = GradientDrawable.OVAL
             }
             contentDescription = "Vissza a RoadRecordba"
             setPadding((5 * density).toInt(), (5 * density).toInt(), (5 * density).toInt(), (5 * density).toInt())
@@ -196,13 +219,14 @@ class NextStopOverlayService : Service() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding((6 * density).toInt(), (6 * density).toInt(), (6 * density).toInt(), (6 * density).toInt())
             background = GradientDrawable().apply {
-                setColor(0xF20D2B60.toInt())
+                setColor(0xDE0D2B60.toInt())
                 cornerRadius = 12 * density
+                setStroke((1 * density).roundToInt(), 0x44FFFFFF)
             }
-            addView(back, LinearLayout.LayoutParams((44 * density).toInt(), (44 * density).toInt()).apply { marginEnd = (7 * density).toInt() })
             addView(current, LinearLayout.LayoutParams(0, (58 * density).toInt(), 1f))
             addView(View(this@NextStopOverlayService).apply { setBackgroundColor(0x55FFFFFF) }, LinearLayout.LayoutParams((1 * density).toInt(), (42 * density).toInt()).apply { setMargins((8 * density).toInt(), 0, (8 * density).toInt(), 0) })
             addView(next, LinearLayout.LayoutParams(0, (58 * density).toInt(), 1f))
+            addView(back, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginStart = (5 * density).toInt() })
             addView(close, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginStart = (5 * density).toInt() })
         }
 
@@ -219,6 +243,10 @@ class NextStopOverlayService : Service() {
             gravity = Gravity.TOP
             horizontalMargin = .02f
             y = if (saved == Int.MIN_VALUE) defaultY else saved.coerceAtLeast(safe.first)
+            if (Build.VERSION.SDK_INT >= 31) {
+                flags = flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                blurBehindRadius = (6 * density).roundToInt()
+            }
         }
         val drag = dragListener()
         current.setOnTouchListener(drag)

@@ -106,7 +106,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  fun routeConfig(dayId:Long)=dao.observeRouteConfig(dayId)
  suspend fun saveRouteConfig(v:RoutePlanConfig)=dao.saveRouteConfig(v)
  suspend fun setImportant(p:DailyPlacePlan)=dao.upsertPlan(p.copy(priority=if(p.priority==Priority.NORMAL)Priority.IMPORTANT else Priority.NORMAL))
- suspend fun closePeriod(date:String){val p=dao.activePeriod()?:return;dao.updatePeriod(p.copy(endDate=date,closedAt=System.currentTimeMillis()));dao.insertPeriod(WorkPeriod(startDate=LocalDate.parse(date).plusDays(1).toString()))}
+ suspend fun closePeriod(date:String){val p=dao.activePeriod()?:return;val closing=LocalDate.parse(date);if(closing.isBefore(LocalDate.parse(p.startDate)))return;dao.updatePeriod(p.copy(endDate=date,closedAt=System.currentTimeMillis()));val nextId=dao.insertPeriod(WorkPeriod(startDate=closing.plusDays(1).toString()));dao.movePeriodDaysAfter(p.id,nextId,date)}
  suspend fun reopenLatestPeriod(){val active=dao.activePeriod()?:return;val closed=dao.observePeriods().first().filter{it.endDate!=null}.maxByOrNull{it.closedAt?:0}?:return;if(active.id!=closed.id){dao.movePeriodDays(active.id,closed.id);dao.deletePeriod(active)};dao.updatePeriod(closed.copy(endDate=null,closedAt=null))}
  suspend fun addGpsPoint(v:GpsPoint){val previous=dao.lastGpsPoint(v.tripId);dao.insertGpsPoint(v);if(previous!=null){val result=FloatArray(1);android.location.Location.distanceBetween(previous.latitude,previous.longitude,v.latitude,v.longitude,result);val addition=result[0].toDouble();if(addition in 0.0..1000.0)dao.trip(v.tripId)?.let{dao.updateTrip(it.copy(distanceMeters=it.distanceMeters+addition))}}}
  suspend fun activeTrip(dayId:Long)=dao.activeTrip(dayId)

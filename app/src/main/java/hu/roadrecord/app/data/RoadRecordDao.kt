@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
  @Delete suspend fun deletePeriod(v:WorkPeriod)
  @Query("SELECT COUNT(*) FROM work_days WHERE periodId=:periodId") suspend fun periodDayCount(periodId:Long):Int
  @Query("UPDATE work_days SET periodId=:targetPeriodId WHERE periodId=:sourcePeriodId") suspend fun movePeriodDays(sourcePeriodId:Long,targetPeriodId:Long)
+ @Query("UPDATE work_days SET periodId=:targetPeriodId WHERE periodId=:sourcePeriodId AND date>:closingDate") suspend fun movePeriodDaysAfter(sourcePeriodId:Long,targetPeriodId:Long,closingDate:String)
  @Insert suspend fun insertDay(v:WorkDay):Long
  @Query("DELETE FROM work_days WHERE id=:dayId") suspend fun deleteDay(dayId:Long)
  @Insert suspend fun insertEvent(v:WorkEvent):Long
