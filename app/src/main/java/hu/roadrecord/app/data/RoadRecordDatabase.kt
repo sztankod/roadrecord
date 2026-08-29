@@ -3,7 +3,7 @@ import android.content.Context
 import androidx.room.*
 import androidx.room.migration.Migration
 
-@Database(entities=[WorkPeriod::class,WorkDay::class,WorkEvent::class,Trip::class,GpsPoint::class,LocationPlace::class,DailyPlacePlan::class,PlaceVisit::class,AppSettings::class,RoutePlanConfig::class],version=17,exportSchema=true)
+@Database(entities=[WorkPeriod::class,WorkDay::class,WorkEvent::class,Trip::class,GpsPoint::class,LocationPlace::class,DailyPlacePlan::class,PlaceVisit::class,AppSettings::class,RoutePlanConfig::class],version=18,exportSchema=true)
 @TypeConverters(Converters::class)
 abstract class RoadRecordDatabase:RoomDatabase(){
  abstract fun dao():RoadRecordDao
@@ -24,7 +24,8 @@ abstract class RoadRecordDatabase:RoomDatabase(){
   private val MIGRATION_14_15=object:Migration(14,15){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE places ADD COLUMN averageDwellMillis INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE places ADD COLUMN dwellSampleCount INTEGER NOT NULL DEFAULT 0")}}
   private val MIGRATION_15_16=object:Migration(15,16){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("UPDATE places SET recognitionRadiusMeters = 30 WHERE recognitionRadiusMeters = 20")}}
   private val MIGRATION_16_17=object:Migration(16,17){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE app_settings ADD COLUMN showExpectedTripEnd INTEGER NOT NULL DEFAULT 1")}}
-  fun get(context:Context)=instance?:synchronized(this){instance?:Room.databaseBuilder(context.applicationContext,RoadRecordDatabase::class.java,"roadrecord.db").addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17).build().also{instance=it}}
+  private val MIGRATION_17_18=object:Migration(17,18){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE app_settings ADD COLUMN stopSeedVersion INTEGER NOT NULL DEFAULT 1");db.execSQL("ALTER TABLE app_settings ADD COLUMN municipalityColors TEXT NOT NULL DEFAULT ''")}}
+  fun get(context:Context)=instance?:synchronized(this){instance?:Room.databaseBuilder(context.applicationContext,RoadRecordDatabase::class.java,"roadrecord.db").addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18).build().also{instance=it}}
   fun closeForRestore(){synchronized(this){instance?.close();instance=null}}
  }
 }

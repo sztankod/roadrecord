@@ -223,10 +223,10 @@ class NextStopOverlayService : Service() {
                 cornerRadius = 12 * density
                 setStroke((1 * density).roundToInt(), 0x44FFFFFF)
             }
+            addView(back, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginEnd = (5 * density).toInt() })
             addView(current, LinearLayout.LayoutParams(0, (58 * density).toInt(), 1f))
             addView(View(this@NextStopOverlayService).apply { setBackgroundColor(0x55FFFFFF) }, LinearLayout.LayoutParams((1 * density).toInt(), (42 * density).toInt()).apply { setMargins((8 * density).toInt(), 0, (8 * density).toInt(), 0) })
             addView(next, LinearLayout.LayoutParams(0, (58 * density).toInt(), 1f))
-            addView(back, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginStart = (5 * density).toInt() })
             addView(close, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginStart = (5 * density).toInt() })
         }
 

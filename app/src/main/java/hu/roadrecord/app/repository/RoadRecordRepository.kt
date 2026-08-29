@@ -112,6 +112,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun activeTrip(dayId:Long)=dao.activeTrip(dayId)
  suspend fun seedDemo(){
   ensureDefaults()
+  val seedSettings=dao.settings()?:return;if(seedSettings.stopSeedVersion>=1)return
   listOf("Budapesti telephely","Váci partner","Szokolyai ügyfél","Verőcei megálló","Kismarosi partner","Nagymarosi ügyfél").forEach{name->dao.placeByName(name)?.let{dao.deletePlace(it)}}
   val places=listOf(
    LocationPlace(name="Kismaros CBA",officialAddress="2623 Kismaros, Szokolyai út 3.",latitude=47.8263645,longitude=19.0133502),
@@ -141,6 +142,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
    LocationPlace(type=PlaceType.BAKERY,name="Vekni pékség",officialAddress="2624 Szokolya, Fő út 110.",latitude=47.8705247,longitude=19.00066,note="Home – a napi túraterv fix kiindulási és érkezési pontja")
   )
   places.forEach{sample->val existing=dao.placeByName(sample.name);if(existing==null)dao.insertPlace(sample)else dao.updatePlace(existing.copy(type=sample.type,officialAddress=sample.officialAddress,latitude=sample.latitude,longitude=sample.longitude))}
+  dao.saveSettings((dao.settings()?:seedSettings).copy(stopSeedVersion=1))
  }
 }
 
