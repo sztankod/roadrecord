@@ -18,7 +18,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   val date=if(local.hour<2)local.toLocalDate().minusDays(1) else local.toLocalDate()
   return date.toString()
  }
- suspend fun startWork(now:Long=System.currentTimeMillis()):Long {ensureDefaults();val existing=activeDay();if(existing!=null)return existing.day.id;val previous=dao.latestClosedDay();val p=dao.activePeriod()?:error("Nincs aktív időszak");val date=workDate(now);val id=dao.insertDay(WorkDay(periodId=p.id,date=date));dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now));previous?.let{old->dao.routeConfigNow(old.day.id)?.let{dao.saveRouteConfig(it.copy(workDayId=id))}};return id}
+ suspend fun startWork(now:Long=System.currentTimeMillis()):Long {ensureDefaults();val existing=activeDay();if(existing!=null)return existing.day.id;dao.settings()?.let{if(it.currentPlaceId!=null)dao.saveSettings(it.copy(currentPlaceId=null))};val previous=dao.latestClosedDay();val p=dao.activePeriod()?:error("Nincs aktív időszak");val date=workDate(now);val id=dao.insertDay(WorkDay(periodId=p.id,date=date));dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now));previous?.let{old->dao.routeConfigNow(old.day.id)?.let{dao.saveRouteConfig(it.copy(workDayId=id))}};return id}
  private suspend fun repairAugustOvernightSession(){
   val zone=java.time.ZoneId.systemDefault()
   fun at(day:Int,hour:Int,minute:Int):Long = java.time.LocalDateTime.of(2026,8,day,hour,minute).atZone(zone).toInstant().toEpochMilli()
