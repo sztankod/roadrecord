@@ -10,7 +10,7 @@ import hu.roadrecord.app.service.TrackingService
 import android.content.Intent
 
 class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Context){
- val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val settings=dao.observeSettings().map{it?:AppSettings()}
+ val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val visits=dao.observeAllVisits(); val settings=dao.observeSettings().map{it?:AppSettings()}
  suspend fun ensureDefaults(){val current=dao.settings()?:AppSettings().also{dao.saveSettings(it)};var updated=current;if(updated.dataResetVersion<1){dao.clearAllWorkDays();updated=updated.copy(dataResetVersion=1)};if(updated.overnightRepairVersion<1){repairAugustOvernightSession();updated=updated.copy(overnightRepairVersion=1)};if(updated.historicalWorkImportVersion<1){importAugustHistoricalWork();updated=updated.copy(historicalWorkImportVersion=1)};repairTripDistances();if(updated!=current)dao.saveSettings(updated);if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
  suspend fun activeDay()=dao.openDay()
  private fun workDate(timestamp:Long):String {
@@ -18,7 +18,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   val date=if(local.hour<2)local.toLocalDate().minusDays(1) else local.toLocalDate()
   return date.toString()
  }
- suspend fun startWork(now:Long=System.currentTimeMillis()):Long {ensureDefaults();val existing=activeDay();if(existing!=null)return existing.day.id;dao.settings()?.let{if(it.currentPlaceId!=null)dao.saveSettings(it.copy(currentPlaceId=null))};val previous=dao.latestClosedDay();val p=dao.activePeriod()?:error("Nincs aktív időszak");val date=workDate(now);val id=dao.insertDay(WorkDay(periodId=p.id,date=date));dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now));previous?.let{old->dao.routeConfigNow(old.day.id)?.let{dao.saveRouteConfig(it.copy(workDayId=id))}};return id}
+ suspend fun startWork(now:Long=System.currentTimeMillis()):Long {ensureDefaults();val existing=activeDay();if(existing!=null)return existing.day.id;dao.settings()?.let{if(it.currentPlaceId!=null||it.currentPlaceDistanceMeters!=null)dao.saveSettings(it.copy(currentPlaceId=null,currentPlaceDistanceMeters=null))};val previous=dao.latestClosedDay();val p=dao.activePeriod()?:error("Nincs aktív időszak");val date=workDate(now);val id=dao.insertDay(WorkDay(periodId=p.id,date=date));dao.insertEvent(WorkEvent(workDayId=id,type=EventType.WORK_START,timestamp=now));previous?.let{old->dao.routeConfigNow(old.day.id)?.let{dao.saveRouteConfig(it.copy(workDayId=id))}};return id}
  private suspend fun repairAugustOvernightSession(){
   val zone=java.time.ZoneId.systemDefault()
   fun at(day:Int,hour:Int,minute:Int):Long = java.time.LocalDateTime.of(2026,8,day,hour,minute).atZone(zone).toInstant().toEpochMilli()
@@ -43,11 +43,19 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  private fun validate(events:List<WorkEvent>){val sorted=events.sortedBy{it.timestamp}; if(sorted!=events.sortedBy{it.timestamp})Unit; var working=false;var travelling=false; sorted.forEach{when(it.type){EventType.WORK_START->{require(!working){"Már van munkakezdés"};working=true};EventType.TRIP_START->{require(working&&!travelling){"Indulás csak aktív munkában lehetséges"};travelling=true};EventType.TRIP_END->{require(travelling){"A visszaérkezés nem előzheti meg az indulást"};travelling=false};EventType.WORK_END->{require(working&&!travelling){"Munka vége csak visszaérkezés után rögzíthető"};working=false}}}}
  fun observeDay(id:Long)=dao.observeDay(id); fun plans(id:Long)=dao.observePlans(id); fun points(id:Long)=dao.observePoints(id)
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
- suspend fun savePlace(v:LocationPlace)=if(v.id==0L)dao.insertPlace(v) else {dao.updatePlace(v);v.id}
+ suspend fun savePlace(v:LocationPlace):Long{val id=if(v.id==0L)dao.insertPlace(v)else{dao.updatePlace(v);v.id};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};return id}
  suspend fun deletePlace(v:LocationPlace)=dao.deletePlace(v)
  suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){
-  if(selected){val existing=dao.plansNow(dayId);dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=existing.size));reapplyPreviousLocks(dayId)}
-  else{dao.deletePlan(dayId,placeId);reapplyPreviousLocks(dayId)}
+  if(selected){val existing=dao.plansNow(dayId);dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=existing.size));reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}
+  else{dao.deletePlan(dayId,placeId);reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}
+ }
+ private suspend fun applyDefaultTourAnchors(dayId:Long){
+  val plans=dao.plansNow(dayId).sortedBy{it.sortHint?:Int.MAX_VALUE};if(plans.isEmpty())return
+  val placeById=dao.placesNow().associateBy{it.id}
+  val starts=plans.filter{placeById[it.placeId]?.defaultTourAnchor=="START"}.sortedBy{placeById[it.placeId]?.defaultTourOrder?:0}
+  val ends=plans.filter{placeById[it.placeId]?.defaultTourAnchor=="END"}.sortedBy{placeById[it.placeId]?.defaultTourOrder?:0}
+  val anchored=(starts+ends).map{it.placeId}.toSet();val middle=plans.filter{it.placeId !in anchored};val arranged=starts+middle+ends
+  arranged.forEachIndexed{i,plan->val fixed=placeById[plan.placeId]?.defaultTourAnchor!="NONE";dao.upsertPlan(plan.copy(sortHint=i,lockedPosition=if(fixed||plan.lockedPosition!=null)i else null))}
  }
  private suspend fun reapplyPreviousLocks(dayId:Long){
   val previous=dao.previousDayPlans(dayId).sortedBy{it.sortHint?:Int.MAX_VALUE};if(previous.isEmpty())return
@@ -74,7 +82,8 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?){dao.plansNow(dayId).firstOrNull{it.placeId==placeId}?.let{dao.upsertPlan(it.copy(lockedPosition=position))}}
  suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited)
  suspend fun nextPlannedStop(dayId:Long,excludePlaceId:Long?=null):LocationPlace?=dao.plansNow(dayId).filter{!it.visited&&it.placeId!=excludePlaceId}.sortedBy{it.sortHint?:Int.MAX_VALUE}.firstNotNullOfOrNull{dao.place(it.placeId)?.takeIf{place->place.active}}
- suspend fun previewCurrentStop(placeId:Long){dao.settings()?.let{if(it.currentPlaceId!=placeId)dao.saveSettings(it.copy(currentPlaceId=placeId))}}
+ suspend fun automaticVisitDelayMillis():Long=(dao.settings()?.automaticVisitDelaySeconds?:30).coerceIn(0,300)*1000L
+ suspend fun previewCurrentStop(placeId:Long?,distanceMeters:Double?){dao.settings()?.let{if(it.currentPlaceId!=placeId||it.currentPlaceDistanceMeters!=distanceMeters)dao.saveSettings(it.copy(currentPlaceId=placeId,currentPlaceDistanceMeters=distanceMeters))}}
  suspend fun detectPlannedStop(dayId:Long,latitude:Double,longitude:Double,accuracy:Float):StopDetection?{
   var nearest:StopDetection?=null
   dao.plansNow(dayId).forEach{plan->
@@ -98,7 +107,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
    activeVisit?.let{visit->val arrival=visit.arrivalTime?:time;val dwell=(time-arrival).coerceAtLeast(0);dao.updateVisit(visit.copy(departureTime=time,dwellDurationMillis=dwell));dao.place(visit.placeId)?.let{place->val samples=place.dwellSampleCount+1;val average=((place.averageDwellMillis.toDouble()*place.dwellSampleCount+dwell)/samples).toLong();dao.updatePlace(place.copy(averageDwellMillis=average,dwellSampleCount=samples))}}
    detection?.let{dao.insertVisit(PlaceVisit(workDayId=dayId,placeId=it.place.id,arrivalTime=time,distanceMeters=it.distanceMeters))}
   }
-  dao.settings()?.let{if(it.currentPlaceId!=current?.id)dao.saveSettings(it.copy(currentPlaceId=current?.id))}
+  dao.settings()?.let{val distance=detection?.distanceMeters;if(it.currentPlaceId!=current?.id||it.currentPlaceDistanceMeters!=distance)dao.saveSettings(it.copy(currentPlaceId=current?.id,currentPlaceDistanceMeters=distance))}
   return current
  }
  suspend fun bakeryPresence(latitude:Double,longitude:Double,accuracy:Float):Boolean?{if(dao.settings()?.automaticBakeryTrips!=true)return null;val place=dao.placeByName("Vekni pékség")?:return null;val lat=place.latitude?:return null;val lon=place.longitude?:return null;val earth=6371000.0;val dLat=Math.toRadians(lat-latitude);val dLon=Math.toRadians(lon-longitude);val a=kotlin.math.sin(dLat/2).let{it*it}+kotlin.math.cos(Math.toRadians(latitude))*kotlin.math.cos(Math.toRadians(lat))*kotlin.math.sin(dLon/2).let{it*it};val distance=2*earth*kotlin.math.atan2(kotlin.math.sqrt(a),kotlin.math.sqrt(1-a));return distance<=place.recognitionRadiusMeters+accuracy.coerceAtMost(35f)}

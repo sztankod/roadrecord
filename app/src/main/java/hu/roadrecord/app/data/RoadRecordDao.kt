@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp") suspend fun gpsPointsNow(tripId:Long):List<GpsPoint>
  @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp") fun observePoints(tripId:Long):Flow<List<GpsPoint>>
  @Query("SELECT * FROM places ORDER BY type,name") fun observePlaces():Flow<List<LocationPlace>>
+ @Query("SELECT * FROM places ORDER BY type,name") suspend fun placesNow():List<LocationPlace>
  @Query("SELECT * FROM places WHERE name=:name LIMIT 1") suspend fun placeByName(name:String):LocationPlace?
  @Query("SELECT * FROM places WHERE id=:id") suspend fun place(id:Long):LocationPlace?
  @Insert suspend fun insertPlace(v:LocationPlace):Long
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM place_visits WHERE workDayId=:dayId AND departureTime IS NULL ORDER BY arrivalTime DESC LIMIT 1") suspend fun activeVisit(dayId:Long):PlaceVisit?
  @Query("SELECT COUNT(*) FROM place_visits WHERE workDayId=:dayId AND placeId=:placeId") suspend fun visitCount(dayId:Long,placeId:Long):Int
  @Query("SELECT * FROM place_visits WHERE placeId=:placeId") fun observeVisits(placeId:Long):Flow<List<PlaceVisit>>
+ @Query("SELECT * FROM place_visits ORDER BY arrivalTime") fun observeAllVisits():Flow<List<PlaceVisit>>
  @Query("SELECT * FROM app_settings WHERE id=1") fun observeSettings():Flow<AppSettings?>
  @Query("SELECT * FROM app_settings WHERE id=1") suspend fun settings():AppSettings?
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveSettings(v:AppSettings)
