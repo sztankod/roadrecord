@@ -44,6 +44,16 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  fun observeDay(id:Long)=dao.observeDay(id); fun plans(id:Long)=dao.observePlans(id); fun points(id:Long)=dao.observePoints(id)
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
  suspend fun savePlace(v:LocationPlace):Long{val id=if(v.id==0L)dao.insertPlace(v)else{dao.updatePlace(v);v.id};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};return id}
+ suspend fun saveDefaultTourOrder(startIds:List<Long>,endIds:List<Long>){
+  val starts=startIds.withIndex().associate{it.value to it.index}
+  val ends=endIds.withIndex().associate{it.value to it.index}
+  dao.placesNow().forEach{place->
+   val anchor=when(place.id){in starts->"START";in ends->"END";else->"NONE"}
+   val order=starts[place.id]?:ends[place.id]?:0
+   if(place.defaultTourAnchor!=anchor||place.defaultTourOrder!=order)dao.updatePlace(place.copy(defaultTourAnchor=anchor,defaultTourOrder=order))
+  }
+  activeDay()?.let{applyDefaultTourAnchors(it.day.id)}
+ }
  suspend fun deletePlace(v:LocationPlace)=dao.deletePlace(v)
  suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){
   if(selected){val existing=dao.plansNow(dayId);dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=existing.size));reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}
