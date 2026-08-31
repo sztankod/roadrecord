@@ -90,7 +90,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  }
  suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>){val plans=dao.plansNow(dayId).associateBy{it.placeId};placeIds.forEachIndexed{i,id->plans[id]?.let{dao.upsertPlan(it.copy(sortHint=i))}}}
  suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?){dao.plansNow(dayId).firstOrNull{it.placeId==placeId}?.let{dao.upsertPlan(it.copy(lockedPosition=position))}}
- suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited)
+ suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited,if(visited)"MANUAL" else null,if(visited)System.currentTimeMillis() else null)
  suspend fun nextPlannedStop(dayId:Long,excludePlaceId:Long?=null):LocationPlace?=dao.plansNow(dayId).filter{!it.visited&&it.placeId!=excludePlaceId}.sortedBy{it.sortHint?:Int.MAX_VALUE}.firstNotNullOfOrNull{dao.place(it.placeId)?.takeIf{place->place.active}}
  suspend fun automaticVisitDelayMillis():Long=(dao.settings()?.automaticVisitDelaySeconds?:30).coerceIn(0,300)*1000L
  suspend fun previewCurrentStop(placeId:Long?,distanceMeters:Double?){dao.settings()?.let{if(it.currentPlaceId!=placeId||it.currentPlaceDistanceMeters!=distanceMeters)dao.saveSettings(it.copy(currentPlaceId=placeId,currentPlaceDistanceMeters=distanceMeters))}}
@@ -102,16 +102,16 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
    val earth=6371000.0;val dLat=Math.toRadians(lat-latitude);val dLon=Math.toRadians(lon-longitude)
    val a=kotlin.math.sin(dLat/2).let{it*it}+kotlin.math.cos(Math.toRadians(latitude))*kotlin.math.cos(Math.toRadians(lat))*kotlin.math.sin(dLon/2).let{it*it}
    val distance=2*earth*kotlin.math.atan2(kotlin.math.sqrt(a),kotlin.math.sqrt(1-a))
-   dao.recordClosestApproach(dayId,place.id,distance)
    val boundedAccuracy=accuracy.coerceIn(0f,30f).toDouble()
    val threshold=if(place.gpsManuallyConfirmed)place.recognitionRadiusMeters+boundedAccuracy*.5 else maxOf(place.recognitionRadiusMeters,40)+boundedAccuracy*.25
+   dao.recordClosestApproach(dayId,place.id,distance,boundedAccuracy,threshold)
    if(distance<=threshold&&(nearest==null||distance<nearest!!.distanceMeters))nearest=StopDetection(place,distance,threshold)
   }
   return nearest
  }
  suspend fun applyStopDetection(dayId:Long,detection:StopDetection?,time:Long):LocationPlace?{
   val current=detection?.place
-  if(current!=null)dao.setPlanVisited(dayId,current.id,true)
+  if(current!=null)dao.setPlanVisited(dayId,current.id,true,"AUTO",time)
   val activeVisit=dao.activeVisit(dayId)
   if(activeVisit?.placeId!=current?.id){
    activeVisit?.let{visit->val arrival=visit.arrivalTime?:time;val dwell=(time-arrival).coerceAtLeast(0);dao.updateVisit(visit.copy(departureTime=time,dwellDurationMillis=dwell));dao.place(visit.placeId)?.let{place->val samples=place.dwellSampleCount+1;val average=((place.averageDwellMillis.toDouble()*place.dwellSampleCount+dwell)/samples).toLong();dao.updatePlace(place.copy(averageDwellMillis=average,dwellSampleCount=samples))}}
