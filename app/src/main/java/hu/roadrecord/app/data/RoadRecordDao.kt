@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.Flow
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsertPlan(v:DailyPlacePlan)
  @Query("UPDATE daily_place_plans SET visited=:visited, completionMode=:mode, completedAt=:completedAt WHERE workDayId=:dayId AND placeId=:placeId") suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean,mode:String?=null,completedAt:Long?=null)
  @Query("UPDATE daily_place_plans SET closestApproachMeters=:distance, closestAccuracyMeters=:accuracy, closestRecognitionThresholdMeters=:threshold WHERE workDayId=:dayId AND placeId=:placeId AND (closestApproachMeters IS NULL OR :distance<closestApproachMeters)") suspend fun recordClosestApproach(dayId:Long,placeId:Long,distance:Double,accuracy:Double,threshold:Double)
+ @Query("UPDATE daily_place_plans SET recognitionDiagnostic=:diagnostic WHERE workDayId=:dayId AND placeId=:placeId") suspend fun recordRecognitionDiagnostic(dayId:Long,placeId:Long,diagnostic:String)
  @Query("DELETE FROM daily_place_plans WHERE workDayId=:dayId AND placeId=:placeId") suspend fun deletePlan(dayId:Long,placeId:Long)
  @Insert suspend fun insertVisit(v:PlaceVisit):Long
  @Update suspend fun updateVisit(v:PlaceVisit)

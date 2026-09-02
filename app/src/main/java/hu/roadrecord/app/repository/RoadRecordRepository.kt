@@ -2,6 +2,8 @@ package hu.roadrecord.app.repository
 
 import hu.roadrecord.app.data.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.Instant
 import android.content.Context
@@ -10,6 +12,7 @@ import hu.roadrecord.app.service.TrackingService
 import android.content.Intent
 
 class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Context){
+ private val planMutex=Mutex()
  val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val visits=dao.observeAllVisits(); val settings=dao.observeSettings().map{it?:AppSettings()}
  suspend fun ensureDefaults(){val current=dao.settings()?:AppSettings().also{dao.saveSettings(it)};var updated=current;if(updated.dataResetVersion<1){dao.clearAllWorkDays();updated=updated.copy(dataResetVersion=1)};if(updated.overnightRepairVersion<1){repairAugustOvernightSession();updated=updated.copy(overnightRepairVersion=1)};if(updated.historicalWorkImportVersion<1){importAugustHistoricalWork();updated=updated.copy(historicalWorkImportVersion=1)};repairTripDistances();if(updated!=current)dao.saveSettings(updated);if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
  suspend fun activeDay()=dao.openDay()
@@ -44,7 +47,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  fun observeDay(id:Long)=dao.observeDay(id); fun plans(id:Long)=dao.observePlans(id); fun points(id:Long)=dao.observePoints(id)
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
  suspend fun savePlace(v:LocationPlace):Long{val id=if(v.id==0L)dao.insertPlace(v)else{dao.updatePlace(v);v.id};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};return id}
- suspend fun saveDefaultTourOrder(startIds:List<Long>,endIds:List<Long>){
+ suspend fun saveDefaultTourOrder(startIds:List<Long>,endIds:List<Long>)=planMutex.withLock{
   val starts=startIds.withIndex().associate{it.value to it.index}
   val ends=endIds.withIndex().associate{it.value to it.index}
   dao.placesNow().forEach{place->
@@ -55,7 +58,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   activeDay()?.let{applyDefaultTourAnchors(it.day.id)}
  }
  suspend fun deletePlace(v:LocationPlace)=dao.deletePlace(v)
- suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean){
+ suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean)=planMutex.withLock{
   if(selected){val existing=dao.plansNow(dayId);dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=existing.size));reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}
   else{dao.deletePlan(dayId,placeId);reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}
  }
@@ -88,11 +91,12 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   reordered.indices.forEach{i->if(reordered[i]==null&&free.hasNext())reordered[i]=free.next()}
   reordered.filterNotNull().forEachIndexed{i,plan->dao.upsertPlan(plan.copy(sortHint=i,lockedPosition=assigned[plan.placeId]))}
  }
- suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>){val plans=dao.plansNow(dayId).associateBy{it.placeId};placeIds.forEachIndexed{i,id->plans[id]?.let{dao.upsertPlan(it.copy(sortHint=i))}}}
+ suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>,unlockedPlaceId:Long?=null)=planMutex.withLock{val plans=dao.plansNow(dayId).associateBy{it.placeId};placeIds.forEachIndexed{i,id->plans[id]?.let{dao.upsertPlan(it.copy(sortHint=i,lockedPosition=if(id==unlockedPlaceId)null else if(it.lockedPosition!=null)i else null))}}}
  suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?){dao.plansNow(dayId).firstOrNull{it.placeId==placeId}?.let{dao.upsertPlan(it.copy(lockedPosition=position))}}
  suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited,if(visited)"MANUAL" else null,if(visited)System.currentTimeMillis() else null)
  suspend fun nextPlannedStop(dayId:Long,excludePlaceId:Long?=null):LocationPlace?=dao.plansNow(dayId).filter{!it.visited&&it.placeId!=excludePlaceId}.sortedBy{it.sortHint?:Int.MAX_VALUE}.firstNotNullOfOrNull{dao.place(it.placeId)?.takeIf{place->place.active}}
  suspend fun automaticVisitDelayMillis():Long=(dao.settings()?.automaticVisitDelaySeconds?:30).coerceIn(0,300)*1000L
+ suspend fun recordRecognitionDiagnostic(dayId:Long,placeId:Long,diagnostic:String)=dao.recordRecognitionDiagnostic(dayId,placeId,diagnostic)
  suspend fun previewCurrentStop(placeId:Long?,distanceMeters:Double?){dao.settings()?.let{if(it.currentPlaceId!=placeId||it.currentPlaceDistanceMeters!=distanceMeters)dao.saveSettings(it.copy(currentPlaceId=placeId,currentPlaceDistanceMeters=distanceMeters))}}
  suspend fun detectPlannedStop(dayId:Long,latitude:Double,longitude:Double,accuracy:Float):StopDetection?{
   var nearest:StopDetection?=null
@@ -108,6 +112,12 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
    if(distance<=threshold&&(nearest==null||distance<nearest!!.distanceMeters))nearest=StopDetection(place,distance,threshold)
   }
   return nearest
+ }
+ suspend fun isClearlyOutsideStop(placeId:Long,latitude:Double,longitude:Double,accuracy:Float):Boolean{
+  if(accuracy>30f)return false
+  val place=dao.place(placeId)?:return true;val lat=place.latitude?:return true;val lon=place.longitude?:return true
+  val result=FloatArray(1);android.location.Location.distanceBetween(latitude,longitude,lat,lon,result)
+  return result[0]>(place.recognitionRadiusMeters+20+accuracy.coerceAtMost(30f)*.5f)
  }
  suspend fun applyStopDetection(dayId:Long,detection:StopDetection?,time:Long):LocationPlace?{
   val current=detection?.place

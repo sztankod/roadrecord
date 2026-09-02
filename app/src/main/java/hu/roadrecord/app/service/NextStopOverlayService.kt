@@ -20,8 +20,17 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import hu.roadrecord.app.MainActivity
-import hu.roadrecord.app.R
 import hu.roadrecord.app.RoadRecordApplication
+import hu.roadrecord.app.ui.widget.DrivingAnimationView
+import hu.roadrecord.app.ui.widget.isTripActive
+import hu.roadrecord.app.ui.widget.isOverlayOnRoad
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 class NextStopOverlayService : Service() {
@@ -64,6 +73,10 @@ class NextStopOverlayService : Service() {
     private var currentAddressView: TextView? = null
     private var nameView: TextView? = null
     private var addressView: TextView? = null
+    private var drivingView: DrivingAnimationView? = null
+    private var currentTitleView: TextView? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var tripActive = false
     private var currentName = "Úton"
     private var currentAddress = ""
     private var nextName = "Nincs további megálló"
@@ -75,6 +88,13 @@ class NextStopOverlayService : Service() {
         super.onCreate()
         instance = this
         restoreContent()
+        // Database observation also catches manual closures and closures while the overlay is hidden.
+        scope.launch {
+            (application as RoadRecordApplication).repository.days
+                .map { days -> days.any { day -> isTripActive(day.events) } }
+                .distinctUntilChanged()
+                .collect { active -> tripActive = active; renderContent() }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -151,10 +171,17 @@ class NextStopOverlayService : Service() {
     }
 
     private fun renderContent() {
-        currentNameView?.text = currentName
+        val roadLabel = currentName.equals("Úton", ignoreCase = true)
+        val isOnRoad = isOverlayOnRoad(tripActive, currentName)
+        currentTitleView?.text = if (isOnRoad) "RÖGZÍTÉS AKTÍV" else "JELENLEGI"
+        currentNameView?.text = if (isOnRoad) "● ÚTON" else if (roadLabel) "Nincs aktív út" else currentName
+        currentNameView?.setTextColor(if (isOnRoad) 0xFF8DD16D.toInt() else Color.WHITE)
         currentAddressView?.text = currentAddress
+        currentAddressView?.visibility = if (isOnRoad && currentAddress.isBlank()) View.GONE else View.VISIBLE
         nameView?.text = nextName
         addressView?.text = nextAddress
+        drivingView?.visibility = if (isOnRoad) View.VISIBLE else View.GONE
+        drivingView?.motionEnabled = isOnRoad
     }
 
     private fun ensureShown() {
@@ -177,6 +204,7 @@ class NextStopOverlayService : Service() {
         currentAddressView = text(10f, 0xFFCFDCF2.toInt())
         nameView = text(14f, Color.WHITE, true)
         addressView = text(10f, 0xFFCFDCF2.toInt())
+        drivingView = DrivingAnimationView(this)
         renderContent()
 
         fun stopColumn(title: String, name: TextView, address: TextView) = LinearLayout(this).apply {
@@ -187,8 +215,12 @@ class NextStopOverlayService : Service() {
             addView(address, LinearLayout.LayoutParams(-1, -2))
         }
 
-        val current = stopColumn("JELENLEGI", currentNameView!!, currentAddressView!!)
+        val current = stopColumn("JELENLEGI", currentNameView!!, currentAddressView!!).apply {
+            currentTitleView = getChildAt(0) as TextView
+            addView(drivingView, LinearLayout.LayoutParams(-1, (36 * density).roundToInt()))
+        }
         val next = stopColumn("KÖVETKEZŐ", nameView!!, addressView!!)
+        renderContent()
         val back = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_revert)
             setColorFilter(Color.WHITE)
@@ -224,7 +256,7 @@ class NextStopOverlayService : Service() {
                 setStroke((1 * density).roundToInt(), 0x44FFFFFF)
             }
             addView(back, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginEnd = (5 * density).toInt() })
-            addView(current, LinearLayout.LayoutParams(0, (58 * density).toInt(), 1f))
+            addView(current, LinearLayout.LayoutParams(0, -2, 1f).apply { current.minimumHeight = (58 * density).roundToInt() })
             addView(View(this@NextStopOverlayService).apply { setBackgroundColor(0x55FFFFFF) }, LinearLayout.LayoutParams((1 * density).toInt(), (42 * density).toInt()).apply { setMargins((8 * density).toInt(), 0, (8 * density).toInt(), 0) })
             addView(next, LinearLayout.LayoutParams(0, (58 * density).toInt(), 1f))
             addView(close, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginStart = (5 * density).toInt() })
@@ -250,6 +282,7 @@ class NextStopOverlayService : Service() {
         }
         val drag = dragListener()
         current.setOnTouchListener(drag)
+        drivingView?.setOnTouchListener(drag)
         next.setOnTouchListener(drag)
         windowManager.addView(container, params)
         root = container
@@ -335,13 +368,17 @@ class NextStopOverlayService : Service() {
     }
 
     private fun hide() {
+        drivingView?.motionEnabled = false
         root?.let { runCatching { windowManager.removeView(it) } }
         root = null
         params = null
+        drivingView = null
+        currentTitleView = null
         visible = false
     }
 
     override fun onDestroy() {
+        scope.cancel()
         hide()
         if (instance === this) instance = null
         super.onDestroy()
