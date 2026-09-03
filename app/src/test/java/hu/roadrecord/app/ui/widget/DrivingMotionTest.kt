@@ -22,7 +22,11 @@ class DrivingMotionTest {
         assertEquals(DrivingMotion.suspensionOffset(0f), DrivingMotion.suspensionOffset(1f), .0001f)
     }
     @Test fun wheelsTurnClockwiseForRightFacingCar() {
-        assertEquals(90f, DrivingMotion.wheelDegrees(.25f), .0001f)
+        assertEquals(90f, DrivingMotion.wheelDegrees(.0625f), .0001f)
+    }
+    @Test fun roadAndWheelsAreBothFourTimesFaster() {
+        assertEquals(-400f, DrivingMotion.roadOffset(1f), .0001f)
+        assertEquals(1440f, DrivingMotion.wheelDegrees(1f), .0001f)
     }
     @Test fun suspensionRemainsSubtle() {
         for (step in 0..100) assertTrue(abs(DrivingMotion.suspensionOffset(step / 100f)) <= .301f)

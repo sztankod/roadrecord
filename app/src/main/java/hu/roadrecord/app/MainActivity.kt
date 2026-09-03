@@ -1,42 +1,51 @@
 package hu.roadrecord.app
+
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import hu.roadrecord.app.data.EventType
+import hu.roadrecord.app.display.ScreenAwakeController
+import hu.roadrecord.app.display.ScreenAwakeOptions
 import hu.roadrecord.app.ui.RoadRecordApp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-class MainActivity:ComponentActivity(){
- override fun onCreate(savedInstanceState:Bundle?){
-  super.onCreate(savedInstanceState)
-  setContent{RoadRecordApp()}
-  val app=application as RoadRecordApplication
-  lifecycleScope.launch{
-   repeatOnLifecycle(Lifecycle.State.STARTED){
-    combine(app.repository.days,app.repository.settings){days,settings->days to settings}.collectLatest{(days,settings)->
-     val events=days.firstOrNull{day->day.events.none{it.type==EventType.WORK_END}}?.events?.sortedBy{it.timestamp}.orEmpty()
-     val tripStartedAt=events.lastOrNull()?.takeIf{it.type==EventType.TRIP_START}?.timestamp
-     val limit=settings.keepScreenOnLimitMinutes
-     val expiresAt=tripStartedAt?.let{if(limit<=0)Long.MAX_VALUE else it+limit*60_000L}
-     val keep=settings.keepScreenOnDuringTrip&&expiresAt!=null&&System.currentTimeMillis()<expiresAt
-     setKeepScreenOn(keep)
-     if(keep&&expiresAt!=Long.MAX_VALUE){
-      delay((expiresAt-System.currentTimeMillis()).coerceAtLeast(0L))
-      setKeepScreenOn(false)
-     }
+class MainActivity : ComponentActivity() {
+    private lateinit var screenAwake: ScreenAwakeController
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        screenAwake = ScreenAwakeController(window, contentResolver)
+        setContent { RoadRecordApp() }
+        val app = application as RoadRecordApplication
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.repository.settings.map(ScreenAwakeOptions::from).distinctUntilChanged()
+                    .collect { screenAwake.updateOptions(it) }
+            }
+        }
     }
-   }
-  }
- }
- private fun setKeepScreenOn(enabled:Boolean){
-  if(enabled)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-  else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
- }
+
+    override fun onResume() {
+        super.onResume()
+        screenAwake.resume()
+    }
+
+    override fun onPause() {
+        screenAwake.pause()
+        super.onPause()
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        screenAwake.userInteracted()
+    }
+
+    override fun onDestroy() {
+        screenAwake.pause()
+        super.onDestroy()
+    }
 }

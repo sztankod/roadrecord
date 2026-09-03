@@ -6,6 +6,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TripAnimationStateTest {
+    @Test fun mainAnimationRequiresActiveTripAndNoCurrentStop() {
+        assertTrue(shouldShowMainDriving(true, false))
+        assertFalse(shouldShowMainDriving(true, true))
+        assertFalse(shouldShowMainDriving(false, false))
+        assertFalse(shouldShowMainDriving(false, true))
+    }
     private fun event(type: EventType, time: Long) = WorkEvent(workDayId = 1, type = type, timestamp = time)
     @Test fun noTripOrOnlyWorkDoesNotAnimate() {
         assertFalse(isTripActive(emptyList()))

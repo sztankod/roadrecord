@@ -14,11 +14,11 @@ import hu.roadrecord.app.R
 
 /** Cached photo-derived car + native asphalt. No per-frame bitmap, path or shader allocations. */
 internal class DrivingScene(resources: Resources) {
-    private val car = DrivingCarArtwork.load(resources)
+    private val car = DrivingVanArtwork.load(resources)
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val roadPaint = Paint().apply {
-        shader = LinearGradient(0f, 108f, 0f, HEIGHT,
-            intArrayOf(0xFF30343A.toInt(), 0xFF1C2025.toInt(), 0xFF14181D.toInt()),
+        shader = LinearGradient(0f, 82f, 0f, HEIGHT,
+            intArrayOf(0xFF7A8793.toInt(), 0xFF596572.toInt(), 0xFF3C4854.toInt()),
             null, Shader.TileMode.CLAMP)
     }
     private val edgePaint = Paint().apply {
@@ -28,18 +28,18 @@ internal class DrivingScene(resources: Resources) {
     }
     private val dashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE7E9EB.toInt() }
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x65000000 }
-    private val carWidth = 282f
+    private val carWidth = DrivingLayout.VAN_WIDTH
     private val carHeight = car.body.height * carWidth / car.body.width
     private val carLeft = (WIDTH - carWidth) / 2f
-    private val carTop = 116f - carHeight
+    private val carTop = DrivingLayout.VAN_BASELINE - carHeight
     private val bodyBounds = RectF(carLeft, carTop, carLeft + carWidth, carTop + carHeight)
-    private val rearBounds = rimBounds(409f, 612f, 89f)
-    private val frontBounds = rimBounds(1382f, 612f, 89f)
+    private val rearBounds = rimBounds(339f, 680f, 49f)
+    private val frontBounds = rimBounds(1340f, 682f, 49f)
 
     private fun rimBounds(cx: Float, cy: Float, radius: Float): RectF {
-        val scale = carWidth / DrivingCarArtwork.CROP_WIDTH
-        val x = carLeft + (cx - DrivingCarArtwork.CROP_LEFT) * scale
-        val y = carTop + (cy - DrivingCarArtwork.CROP_TOP) * scale
+        val scale = carWidth / DrivingVanArtwork.CROP_WIDTH
+        val x = carLeft + (cx - DrivingVanArtwork.CROP_LEFT) * scale
+        val y = carTop + (cy - DrivingVanArtwork.CROP_TOP) * scale
         val r = radius * scale
         return RectF(x - r, y - r, x + r, y + r)
     }
@@ -50,16 +50,18 @@ internal class DrivingScene(resources: Resources) {
         canvas.save()
         canvas.translate((width - WIDTH * scale) / 2f, (height - HEIGHT * scale) / 2f)
         canvas.scale(scale, scale)
-        canvas.clipRect(0f, 0f, WIDTH, HEIGHT)
-        canvas.drawRect(0f, 108f, WIDTH, HEIGHT, roadPaint)
-        canvas.drawLine(0f, 108f, WIDTH, 108f, edgePaint)
-        canvas.drawLine(0f, HEIGHT - 1f, WIDTH, HEIGHT - 1f, edgePaint)
-        var x = DrivingMotion.roadOffset(progress) - DrivingMotion.DASH_PITCH
-        while (x < WIDTH) {
-            canvas.drawRect(x, 126f, x + 22f, 128f, dashPaint)
+        val roadLeft = -(width / scale - WIDTH) / 2f
+        val roadRight = WIDTH - roadLeft
+        canvas.clipRect(roadLeft, 0f, roadRight, HEIGHT)
+        canvas.drawRect(roadLeft, 82f, roadRight, HEIGHT, roadPaint)
+        canvas.drawLine(roadLeft, 82f, roadRight, 82f, edgePaint)
+        canvas.drawLine(roadLeft, HEIGHT - 1f, roadRight, HEIGHT - 1f, edgePaint)
+        var x = DrivingMotion.roadOffset(progress) - DrivingMotion.DASH_PITCH + roadLeft
+        while (x < roadRight) {
+            canvas.drawRect(x, 95f, x + 22f, 97f, dashPaint)
             x += DrivingMotion.DASH_PITCH
         }
-        canvas.drawOval(65f, 110f, 345f, 119f, shadowPaint)
+        canvas.drawOval(94f, 83f, 306f, 90f, shadowPaint)
         canvas.save()
         canvas.translate(0f, DrivingMotion.suspensionOffset(progress))
         canvas.drawBitmap(car.body, null, bodyBounds, imagePaint)
@@ -77,71 +79,78 @@ internal class DrivingScene(resources: Resources) {
     }
 
     companion object {
-        const val WIDTH = 400f
-        const val HEIGHT = 145f
+        const val WIDTH = DrivingLayout.SCENE_WIDTH
+        const val HEIGHT = DrivingLayout.SCENE_HEIGHT
     }
 }
 
 /**
- * ImageGen preserved the car but baked in a checkerboard. Mask once on load using its measured
- * outline. The immutable result is shared across all views (~1 MB), never regenerated per frame.
+ * Shared Transit artwork, masked once at load time. The source's neutral background is excluded
+ * with its measured outline; both hosts reuse the same body and circular rim bitmaps.
  */
-internal object DrivingCarArtwork {
-    const val CROP_LEFT = 80f
-    const val CROP_TOP = 210f
-    const val CROP_WIDTH = 1590f
-    private const val CROP_HEIGHT = 524f
+internal object DrivingVanArtwork {
+    const val CROP_LEFT = 30f
+    const val CROP_TOP = 202f
+    const val CROP_WIDTH = 1556f
+    private const val CROP_HEIGHT = 564f
     private var cached: Artwork? = null
     data class Artwork(val body: Bitmap, val rearRim: Bitmap, val frontRim: Bitmap)
 
     @Synchronized
     fun load(resources: Resources): Artwork {
         cached?.let { return it }
-        val source = BitmapFactory.decodeResource(resources, R.drawable.driving_car_source,
+        val source = BitmapFactory.decodeResource(resources, R.drawable.driving_transit_source,
             BitmapFactory.Options().apply { inSampleSize = 2; inScaled = false })
-        val sourceBounds = RectF(0f, 0f, 1774f, 887f)
+        val sourceBounds = RectF(0f, 0f, 1665f, 945f)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val outline = Path().apply {
-            moveTo(119f, 353f)
-            lineTo(251f, 335f)
-            cubicTo(348f, 304f, 408f, 272f, 478f, 247f)
-            lineTo(511f, 238f); lineTo(514f, 229f); quadTo(530f, 225f, 545f, 230f)
-            cubicTo(659f, 208f, 772f, 210f, 868f, 217f)
-            cubicTo(1027f, 224f, 1130f, 299f, 1246f, 370f)
-            lineTo(1272f, 368f); lineTo(1297f, 377f)
-            cubicTo(1458f, 395f, 1592f, 426f, 1637f, 474f)
-            lineTo(1663f, 529f); lineTo(1664f, 570f); lineTo(1658f, 591f)
-            lineTo(1663f, 615f); lineTo(1659f, 643f)
-            quadTo(1591f, 662f, 1501f, 668f)
-            cubicTo(1482f, 709f, 1439f, 728f, 1382f, 728f)
-            cubicTo(1321f, 728f, 1279f, 703f, 1260f, 666f)
-            lineTo(536f, 664f)
-            cubicTo(514f, 707f, 467f, 728f, 408f, 728f)
-            cubicTo(349f, 728f, 302f, 701f, 289f, 648f)
-            quadTo(176f, 636f, 111f, 619f)
-            quadTo(93f, 608f, 85f, 580f)
-            lineTo(90f, 563f); lineTo(88f, 510f); lineTo(109f, 450f)
-            lineTo(108f, 405f); lineTo(115f, 386f); close()
+            moveTo(73f, 225f)
+            quadTo(75f, 207f, 102f, 206f)
+            lineTo(650f, 206f); lineTo(1017f, 214f)
+            cubicTo(1090f, 216f, 1136f, 223f, 1186f, 267f)
+            cubicTo(1248f, 317f, 1324f, 394f, 1361f, 430f)
+            lineTo(1391f, 440f)
+            quadTo(1516f, 467f, 1555f, 515f)
+            lineTo(1574f, 585f); lineTo(1580f, 614f); lineTo(1580f, 647f)
+            lineTo(1576f, 656f); lineTo(1579f, 677f)
+            quadTo(1580f, 689f, 1562f, 695f)
+            quadTo(1498f, 707f, 1424f, 709f)
+            cubicTo(1412f, 741f, 1382f, 762f, 1340f, 762f)
+            cubicTo(1297f, 762f, 1263f, 743f, 1250f, 709f)
+            lineTo(1230f, 709f); lineTo(1170f, 705f); lineTo(480f, 702f)
+            quadTo(458f, 741f, 421f, 739f)
+            lineTo(395f, 740f)
+            cubicTo(377f, 754f, 358f, 758f, 338f, 758f)
+            cubicTo(297f, 758f, 263f, 733f, 255f, 687f)
+            lineTo(249f, 687f); lineTo(248f, 706f); lineTo(239f, 708f)
+            lineTo(238f, 691f)
+            quadTo(100f, 685f, 41f, 674f)
+            lineTo(33f, 668f); lineTo(32f, 642f); lineTo(39f, 640f)
+            lineTo(40f, 572f); lineTo(42f, 567f); lineTo(44f, 427f)
+            lineTo(49f, 424f); lineTo(55f, 332f); lineTo(53f, 328f)
+            lineTo(55f, 314f); lineTo(60f, 311f)
+            close()
         }
         val body = Bitmap.createBitmap(800, (800 * CROP_HEIGHT / CROP_WIDTH).toInt(), Bitmap.Config.ARGB_8888)
         Canvas(body).apply {
-            scale(body.width / CROP_WIDTH, body.height / CROP_HEIGHT)
+            // One uniform scale preserves the van's tall roof and wheel aspect ratios.
+            scale(body.width / CROP_WIDTH, body.width / CROP_WIDTH)
             translate(-CROP_LEFT, -CROP_TOP)
             clipPath(outline)
             drawBitmap(source, null, sourceBounds, paint)
         }
         fun rim(cx: Float, cy: Float): Bitmap {
-            val radius = 89f
-            val result = Bitmap.createBitmap(92, 92, Bitmap.Config.ARGB_8888)
+            val radius = 49f
+            val result = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
             Canvas(result).apply {
-                scale(92f / (radius * 2f), 92f / (radius * 2f))
+                scale(64f / (radius * 2f), 64f / (radius * 2f))
                 translate(radius - cx, radius - cy)
                 clipPath(Path().apply { addCircle(cx, cy, radius, Path.Direction.CW) })
                 drawBitmap(source, null, sourceBounds, paint)
             }
             return result
         }
-        val artwork = Artwork(body, rim(409f, 612f), rim(1382f, 612f))
+        val artwork = Artwork(body, rim(339f, 680f), rim(1340f, 682f))
         source.recycle()
         cached = artwork
         return artwork

@@ -23,6 +23,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import hu.roadrecord.app.ui.widget.DrivingAnimationView
+import hu.roadrecord.app.ui.widget.DrivingLayout
 
 /** Only composed while the existing event model says an active trip is in progress. */
 @Composable
@@ -37,30 +38,33 @@ internal fun ActiveDriveStatusCard() {
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val bandHeight = DrivingLayout.mainBandHeight(maxWidth.value).dp
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(bandHeight),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF121820)),
-        border = BorderStroke(1.dp, Color(0xFF343B43)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAFC)),
+        border = BorderStroke(1.dp, Color(0xFFE1E5EA)),
     ) {
-        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(Modifier.size(30.dp), shape = CircleShape, color = Color.Transparent,
-                border = BorderStroke(1.dp, Color(0xFF548343))) {
+        Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp).heightIn(min = 26.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.size(24.dp), shape = CircleShape, color = Color.Transparent,
+                border = BorderStroke(1.dp, Color(0xFFD6E9D0))) {
                 Box(contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(13.dp).background(Color(0xFF8DD16D), CircleShape))
+                    Box(Modifier.size(11.dp).background(Color(0xFF23BB64), CircleShape))
                 }
             }
             Spacer(Modifier.width(10.dp))
-            Text("ÚTON", color = Color(0xFF8DD16D), fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text("ÚTON", color = Color(0xFF397D32), fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Spacer(Modifier.width(12.dp))
-            Text("Rögzítés aktív", color = Color(0xFFB9BDC2), fontSize = 12.sp)
+            Text("Rögzítés aktív", modifier = Modifier.weight(1f), color = Color(0xFF616161), fontSize = 12.sp, maxLines = 1)
         }
         AndroidView(
             factory = { DrivingAnimationView(it) },
-            modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp).aspectRatio(400f / 145f)
+            modifier = Modifier.fillMaxWidth().weight(1f)
                 .onGloballyPositioned { inViewport = !it.boundsInWindow().isEmpty },
             onRelease = { it.motionEnabled = false },
             update = { it.motionEnabled = resumed && inViewport },
         )
+    }
     }
 }

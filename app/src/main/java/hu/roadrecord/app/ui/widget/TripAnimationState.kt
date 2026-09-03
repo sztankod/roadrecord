@@ -9,3 +9,6 @@ internal fun isTripActive(events: List<WorkEvent>): Boolean =
 
 internal fun isOverlayOnRoad(tripActive: Boolean, currentName: String): Boolean =
     tripActive && currentName.equals("Úton", ignoreCase = true)
+
+internal fun shouldShowMainDriving(tripActive: Boolean, hasCurrentStop: Boolean): Boolean =
+    tripActive && !hasCurrentStop

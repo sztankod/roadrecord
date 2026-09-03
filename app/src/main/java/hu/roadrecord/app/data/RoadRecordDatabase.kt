@@ -3,7 +3,7 @@ import android.content.Context
 import androidx.room.*
 import androidx.room.migration.Migration
 
-@Database(entities=[WorkPeriod::class,WorkDay::class,WorkEvent::class,Trip::class,GpsPoint::class,LocationPlace::class,DailyPlacePlan::class,PlaceVisit::class,AppSettings::class,RoutePlanConfig::class],version=24,exportSchema=true)
+@Database(entities=[WorkPeriod::class,WorkDay::class,WorkEvent::class,Trip::class,GpsPoint::class,LocationPlace::class,DailyPlacePlan::class,PlaceVisit::class,AppSettings::class,RoutePlanConfig::class],version=25,exportSchema=true)
 @TypeConverters(Converters::class)
 abstract class RoadRecordDatabase:RoomDatabase(){
  abstract fun dao():RoadRecordDao
@@ -31,7 +31,8 @@ abstract class RoadRecordDatabase:RoomDatabase(){
   private val MIGRATION_21_22=object:Migration(21,22){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE app_settings ADD COLUMN keepScreenOnDuringTrip INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE app_settings ADD COLUMN keepScreenOnLimitMinutes INTEGER NOT NULL DEFAULT 60")}}
   private val MIGRATION_22_23=object:Migration(22,23){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("UPDATE places SET recognitionRadiusMeters = 40")}}
   private val MIGRATION_23_24=object:Migration(23,24){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE daily_place_plans ADD COLUMN recognitionDiagnostic TEXT")}}
-  fun get(context:Context)=instance?:synchronized(this){instance?:Room.databaseBuilder(context.applicationContext,RoadRecordDatabase::class.java,"roadrecord.db").addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18,MIGRATION_18_19,MIGRATION_19_20,MIGRATION_20_21,MIGRATION_21_22,MIGRATION_22_23,MIGRATION_23_24).build().also{instance=it}}
+  fun get(context:Context)=instance?:synchronized(this){instance?:Room.databaseBuilder(context.applicationContext,RoadRecordDatabase::class.java,"roadrecord.db").addMigrations(MIGRATION_1_2,MIGRATION_2_3,MIGRATION_3_4,MIGRATION_4_5,MIGRATION_5_6,MIGRATION_6_7,MIGRATION_7_8,MIGRATION_8_9,MIGRATION_9_10,MIGRATION_10_11,MIGRATION_11_12,MIGRATION_12_13,MIGRATION_13_14,MIGRATION_14_15,MIGRATION_15_16,MIGRATION_16_17,MIGRATION_17_18,MIGRATION_18_19,MIGRATION_19_20,MIGRATION_20_21,MIGRATION_21_22,MIGRATION_22_23,MIGRATION_23_24,MIGRATION_24_25).build().also{instance=it}}
+  internal val MIGRATION_24_25=object:Migration(24,25){override fun migrate(db:androidx.sqlite.db.SupportSQLiteDatabase){db.execSQL("ALTER TABLE app_settings ADD COLUMN keepScreenOnEnabled INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE app_settings ADD COLUMN screenDimEnabled INTEGER NOT NULL DEFAULT 0");db.execSQL("ALTER TABLE app_settings ADD COLUMN screenDimAfterMinutes INTEGER NOT NULL DEFAULT 2");db.execSQL("ALTER TABLE app_settings ADD COLUMN screenDimPercent INTEGER NOT NULL DEFAULT 30");db.execSQL("UPDATE app_settings SET keepScreenOnEnabled = keepScreenOnDuringTrip")}}
   fun closeForRestore(){synchronized(this){instance?.close();instance=null}}
  }
 }

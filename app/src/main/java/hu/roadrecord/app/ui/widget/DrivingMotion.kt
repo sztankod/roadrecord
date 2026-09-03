@@ -7,8 +7,9 @@ import kotlin.math.sin
 internal object DrivingMotion {
     const val LOOP_DURATION_MS = 1_800L
     const val DASH_PITCH = 50f
-    fun roadOffset(progress: Float) = -progress * DASH_PITCH * 2f
+    const val SPEED_MULTIPLIER = 4f
+    fun roadOffset(progress: Float) = -progress * DASH_PITCH * 2f * SPEED_MULTIPLIER
     // Positive Android rotation is clockwise: correct for the right-facing reference car.
-    fun wheelDegrees(progress: Float) = progress * 360f
+    fun wheelDegrees(progress: Float) = progress * 360f * SPEED_MULTIPLIER
     fun suspensionOffset(progress: Float) = sin(progress * 2.0 * PI).toFloat() * .3f
 }
