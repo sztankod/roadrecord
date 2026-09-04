@@ -13,8 +13,8 @@ android {
         applicationId = "hu.roadrecord.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 142
-        versionName = "1.40"
+        versionCode = 143
+        versionName = "1.41"
     }
     val stableKeystore = System.getenv("ROADRECORD_KEYSTORE")
     signingConfigs {
