@@ -44,7 +44,7 @@ object BackupManager {
         val name="roadrecord-backup-${LocalDateTime.now().format(stamp)}.zip"
         val values=ContentValues().apply{put(MediaStore.MediaColumns.DISPLAY_NAME,name);put(MediaStore.MediaColumns.MIME_TYPE,"application/zip");put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_DOWNLOADS+"/RoadRecord")}
         context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values)?.let{uri->context.contentResolver.openOutputStream(uri)?.use{out->temp.inputStream().use{it.copyTo(out)}}}
-        if(copyToDrive&&settings.backupDriveTreeUri.isNotBlank())runCatching{val tree=DocumentFile.fromTreeUri(context,Uri.parse(settings.backupDriveTreeUri));tree?.createFile("application/zip",name)?.uri?.let{uri->context.contentResolver.openOutputStream(uri)?.use{out->temp.inputStream().use{it.copyTo(out)}}}}
+        if(copyToDrive&&settings.backupDriveTreeUri.isNotBlank())runCatching{val tree=DocumentFile.fromTreeUri(context,Uri.parse(settings.backupDriveTreeUri));tree?.createFile("application/zip",name)?.uri?.let{uri->context.contentResolver.openOutputStream(uri)?.use{out->temp.inputStream().use{it.copyTo(out)}}};tree?.let{pruneDriveBackups(it,settings.backupRetentionCount)}}
         else if(driveDue&&settings.backupDriveTreeUri.isNotBlank())WorkManager.getInstance(context).enqueueUniqueWork("roadrecord-pending-drive",ExistingWorkPolicy.REPLACE,OneTimeWorkRequestBuilder<BackupWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build()).build())
         app.database.dao().saveSettings(settings.copy(lastBackupAt=System.currentTimeMillis()))
         temp.delete();true
@@ -69,6 +69,7 @@ object BackupManager {
     }
 
     private fun addFile(zip:ZipOutputStream,file:File,name:String){if(!file.exists())return;zip.putNextEntry(ZipEntry(name));file.inputStream().use{it.copyTo(zip)};zip.closeEntry()}
+    private fun pruneDriveBackups(folder:DocumentFile,keep:Int){if(keep<=0)return;folder.listFiles().filter{it.isFile&&it.name?.matches(Regex("roadrecord-backup-\\d{8}-\\d{6}\\.zip"))==true}.sortedByDescending{it.name}.drop(keep).forEach{runCatching{it.delete()}}}
     private fun isWifi(context:Context):Boolean{val cm=context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager;val caps=cm.getNetworkCapabilities(cm.activeNetwork)?:return false;return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)&&caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)}
 }
 

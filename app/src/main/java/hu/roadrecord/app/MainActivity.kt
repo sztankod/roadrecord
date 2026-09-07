@@ -27,6 +27,13 @@ class MainActivity : ComponentActivity() {
                     .collect { screenAwake.updateOptions(it) }
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.repository.days.map { days ->
+                    days.any { day -> day.events.sortedBy { it.timestamp }.lastOrNull()?.type == hu.roadrecord.app.data.EventType.TRIP_START }
+                }.distinctUntilChanged().collect { screenAwake.updateTripActive(it) }
+            }
+        }
     }
 
     override fun onResume() {

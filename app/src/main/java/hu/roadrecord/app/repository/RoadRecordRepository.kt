@@ -101,6 +101,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun detectPlannedStop(dayId:Long,latitude:Double,longitude:Double,accuracy:Float):StopDetection?{
   var nearest:StopDetection?=null
   dao.plansNow(dayId).forEach{plan->
+   if(plan.visited)return@forEach
    val place=dao.place(plan.placeId)?.takeIf{it.active}?:return@forEach
    val lat=place.latitude?:return@forEach;val lon=place.longitude?:return@forEach
    val earth=6371000.0;val dLat=Math.toRadians(lat-latitude);val dLon=Math.toRadians(lon-longitude)

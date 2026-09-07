@@ -14,6 +14,7 @@ internal class ScreenAwakeController(private val window: Window, private val res
     private val deadline = Runnable { applyPolicy() }
     private var options = ScreenAwakeOptions()
     private var active = false
+    private var tripActive = false
     private var lastInteractionAt = 0L
     private var originalBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
     private var keepingAwake = false
@@ -42,6 +43,13 @@ internal class ScreenAwakeController(private val window: Window, private val res
         applyPolicy()
     }
 
+    fun updateTripActive(value: Boolean) {
+        if (tripActive == value) return
+        tripActive = value
+        lastInteractionAt = SystemClock.elapsedRealtime()
+        applyPolicy()
+    }
+
     fun pause() {
         handler.removeCallbacks(deadline)
         if (!active) return
@@ -53,7 +61,8 @@ internal class ScreenAwakeController(private val window: Window, private val res
     private fun applyPolicy() {
         handler.removeCallbacks(deadline)
         if (!active) return
-        val decision = options.decision(SystemClock.elapsedRealtime() - lastInteractionAt)
+        val decision = if (tripActive) options.decision(SystemClock.elapsedRealtime() - lastInteractionAt)
+        else ScreenAwakeDecision(false, false, null)
         setKeepAwake(decision.keepAwake)
         val brightness = if (decision.dimmed) {
             val baseline = if (originalBrightness >= 0f) originalBrightness else {
