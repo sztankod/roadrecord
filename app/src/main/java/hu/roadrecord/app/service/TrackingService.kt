@@ -12,13 +12,15 @@ import com.google.android.gms.location.*
 import hu.roadrecord.app.MainActivity
 import hu.roadrecord.app.RoadRecordApplication
 import hu.roadrecord.app.data.GpsPoint
+import hu.roadrecord.app.theme.ThemeStore
 import kotlinx.coroutines.*
 
 class TrackingService:Service(){
  companion object { const val ACTION_START="hu.roadrecord.START";const val ACTION_STOP="hu.roadrecord.STOP";const val EXTRA_DAY="day";private const val CHANNEL="active_work";private const val ID=77 }
  private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO);private lateinit var client:FusedLocationProviderClient;private var dayId=0L;private var bakeryInside:Boolean?=null;private var currentStopId:Long?=null;private var pendingStopId:Long?=null;private var pendingStopSince:Long?=null;private var pendingMisses=0;private var currentOutsideHits=0
  private val callback=object:LocationCallback(){override fun onLocationResult(result:LocationResult){val l=result.lastLocation?:return;scope.launch{
-  val app=application as RoadRecordApplication
+ val app=application as RoadRecordApplication
+  ThemeStore.saveLocation(this@TrackingService,l.latitude,l.longitude,l.time)
   val inside=app.repository.bakeryPresence(l.latitude,l.longitude,l.accuracy);if(inside!=null){val previous=bakeryInside;if(previous!=null&&previous!=inside)app.repository.automaticBakeryTransition(dayId,left=!inside,time=l.time)else if(previous==null&&inside&&app.repository.activeTrip(dayId)!=null)app.repository.automaticBakeryTransition(dayId,left=false,time=l.time);bakeryInside=inside}
   val poorAccuracy=l.accuracy>30f
   val detection=if(poorAccuracy)null else app.repository.detectPlannedStop(dayId,l.latitude,l.longitude,l.accuracy);val detectedId=detection?.place?.id

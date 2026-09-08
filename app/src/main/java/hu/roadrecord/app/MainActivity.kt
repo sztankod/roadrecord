@@ -1,14 +1,19 @@
 package hu.roadrecord.app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import hu.roadrecord.app.display.ScreenAwakeController
 import hu.roadrecord.app.display.ScreenAwakeOptions
 import hu.roadrecord.app.ui.RoadRecordApp
+import hu.roadrecord.app.theme.ThemeStore
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -19,7 +24,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         screenAwake = ScreenAwakeController(window, contentResolver)
-        setContent { RoadRecordApp() }
+        val initialAppearance=ThemeStore.mode(this)
+        setContent { RoadRecordApp(initialAppearance) }
+        if(ActivityCompat.checkSelfPermission(this,Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED){LocationServices.getFusedLocationProviderClient(this).lastLocation.addOnSuccessListener{location->location?.let{ThemeStore.saveLocation(this,it.latitude,it.longitude,it.time)}}}
         val app = application as RoadRecordApplication
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
