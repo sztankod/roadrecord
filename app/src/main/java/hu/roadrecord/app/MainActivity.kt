@@ -37,7 +37,9 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 app.repository.days.map { days ->
-                    days.any { day -> day.events.sortedBy { it.timestamp }.lastOrNull()?.type == hu.roadrecord.app.data.EventType.TRIP_START }
+                    // The display policy belongs to the whole open work session. At a stop the
+                    // last event is TRIP_END, but that must not silently cancel dimming/keep-awake.
+                    days.any { day -> day.events.none { it.type == hu.roadrecord.app.data.EventType.WORK_END } }
                 }.distinctUntilChanged().collect { screenAwake.updateTripActive(it) }
             }
         }

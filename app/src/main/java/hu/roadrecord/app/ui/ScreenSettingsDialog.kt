@@ -33,7 +33,7 @@ internal fun ScreenSettingsDialog(settings: AppSettings, onDismiss: () -> Unit, 
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ScreenToggle("Képernyő ébren tartása", enabled) { enabled = it }
-                Text("Csak akkor működik, amikor a RoadRecord van előtérben, nem csak út közben.", fontSize = 12.sp)
+                Text("Nyitott munka közben működik, amikor a RoadRecord van előtérben – a megállóknál is.", fontSize = 12.sp)
                 if (enabled) {
                     OutlinedTextField(minutes, { minutes = it.filter(Char::isDigit).take(3) },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,

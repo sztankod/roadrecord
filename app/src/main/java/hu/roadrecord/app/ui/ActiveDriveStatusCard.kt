@@ -43,20 +43,20 @@ internal fun ActiveDriveStatusCard() {
     Card(
         modifier = Modifier.fillMaxWidth().height(bandHeight),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAFC)),
-        border = BorderStroke(1.dp, Color(0xFFE1E5EA)),
+        colors = CardDefaults.cardColors(containerColor = RoadSurfaceElevated),
+        border = BorderStroke(1.dp, RoadCardBorder),
     ) {
         Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp).heightIn(min = 26.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(Modifier.size(24.dp), shape = CircleShape, color = Color.Transparent,
-                border = BorderStroke(1.dp, Color(0xFFD6E9D0))) {
+                border = BorderStroke(1.dp, RoadAccentGreen.copy(alpha = .38f))) {
                 Box(contentAlignment = Alignment.Center) {
                     Box(Modifier.size(11.dp).background(Color(0xFF23BB64), CircleShape))
                 }
             }
             Spacer(Modifier.width(10.dp))
-            Text("ÚTON", color = Color(0xFF397D32), fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("ÚTON", color = RoadAccentGreen, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Spacer(Modifier.width(12.dp))
-            Text("Rögzítés aktív", modifier = Modifier.weight(1f), color = Color(0xFF616161), fontSize = 12.sp, maxLines = 1)
+            Text("Rögzítés aktív", modifier = Modifier.weight(1f), color = RoadTextSecondary, fontSize = 12.sp, maxLines = 1)
         }
         AndroidView(
             factory = { DrivingAnimationView(it) },
