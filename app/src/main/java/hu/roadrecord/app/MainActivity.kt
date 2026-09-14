@@ -38,7 +38,8 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 app.repository.settings.map { it.landscapeEnabled }.distinctUntilChanged().collect { enabled ->
-                    requestedOrientation = if (enabled) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    val target = if (enabled) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    if (requestedOrientation != target) requestedOrientation = target
                 }
             }
         }
