@@ -5,7 +5,7 @@ import android.content.Intent
 import java.time.*
 import kotlin.math.*
 
-enum class AppearanceMode { AUTO, LIGHT, DARK }
+enum class AppearanceMode { AUTO, AUTO_TRIP, LIGHT, DARK }
 data class KnownLocation(val latitude:Double,val longitude:Double,val recordedAt:Long)
 data class SolarWindow(val sunrise:Instant,val sunset:Instant)
 

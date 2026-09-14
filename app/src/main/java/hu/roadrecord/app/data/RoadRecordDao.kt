@@ -53,6 +53,7 @@ import kotlinx.coroutines.flow.Flow
  @Update suspend fun updateVisit(v:PlaceVisit)
  @Query("SELECT * FROM place_visits WHERE workDayId=:dayId AND departureTime IS NULL ORDER BY arrivalTime DESC LIMIT 1") suspend fun activeVisit(dayId:Long):PlaceVisit?
  @Query("SELECT COUNT(*) FROM place_visits WHERE workDayId=:dayId AND placeId=:placeId") suspend fun visitCount(dayId:Long,placeId:Long):Int
+ @Query("DELETE FROM place_visits WHERE workDayId=:dayId AND placeId=:placeId AND arrivalTime=:completedAt AND departureTime=:completedAt") suspend fun deleteManualVisit(dayId:Long,placeId:Long,completedAt:Long)
  @Query("SELECT * FROM place_visits WHERE placeId=:placeId") fun observeVisits(placeId:Long):Flow<List<PlaceVisit>>
  @Query("SELECT * FROM place_visits ORDER BY arrivalTime") fun observeAllVisits():Flow<List<PlaceVisit>>
  @Query("SELECT * FROM app_settings WHERE id=1") fun observeSettings():Flow<AppSettings?>

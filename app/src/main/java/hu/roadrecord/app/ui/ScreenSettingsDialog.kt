@@ -16,13 +16,14 @@ import hu.roadrecord.app.display.ScreenAwakeOptions
 import kotlin.math.roundToInt
 
 @Composable
-internal fun ScreenSettingsDialog(settings: AppSettings, onDismiss: () -> Unit, onSave: (ScreenAwakeOptions) -> Unit) {
+internal fun ScreenSettingsDialog(settings: AppSettings, onDismiss: () -> Unit, onSave: (ScreenAwakeOptions, Boolean) -> Unit) {
     val initial = remember { ScreenAwakeOptions.from(settings) }
     var enabled by remember { mutableStateOf(initial.enabled) }
     var minutes by remember { mutableStateOf(initial.limitMinutes.toString()) }
     var dimEnabled by remember { mutableStateOf(initial.dimEnabled) }
     var dimMinutes by remember { mutableStateOf(initial.dimAfterMinutes.toString()) }
     var percent by remember { mutableFloatStateOf(initial.dimPercent.toFloat()) }
+    var landscapeEnabled by remember { mutableStateOf(settings.landscapeEnabled) }
     val limit = minutes.toIntOrNull()
     val dimAfter = dimMinutes.toIntOrNull()
     val limitValid = limit != null && limit in 0..720
@@ -33,6 +34,8 @@ internal fun ScreenSettingsDialog(settings: AppSettings, onDismiss: () -> Unit, 
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ScreenToggle("Képernyő ébren tartása", enabled) { enabled = it }
+                ScreenToggle("Fekvő elrendezés engedélyezése", landscapeEnabled) { landscapeEnabled = it }
+                Text("Kikapcsolva a RoadRecord álló helyzetben marad. Bekapcsolva forgatáskor az aktuális oldal megmarad.", fontSize = 11.sp)
                 Text("Nyitott munka közben működik, amikor a RoadRecord van előtérben – a megállóknál is.", fontSize = 12.sp)
                 if (enabled) {
                     OutlinedTextField(minutes, { minutes = it.filter(Char::isDigit).take(3) },
@@ -59,7 +62,7 @@ internal fun ScreenSettingsDialog(settings: AppSettings, onDismiss: () -> Unit, 
         },
         confirmButton = { TextButton(enabled = valid, onClick = {
             onSave(ScreenAwakeOptions(enabled, limit ?: initial.limitMinutes, dimEnabled,
-                dimAfter ?: initial.dimAfterMinutes, percent.roundToInt()))
+                dimAfter ?: initial.dimAfterMinutes, percent.roundToInt()), landscapeEnabled)
         }) { Text("Mentés") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Mégse") } },
     )

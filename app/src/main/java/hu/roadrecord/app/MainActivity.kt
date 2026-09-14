@@ -3,6 +3,7 @@ package hu.roadrecord.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.content.pm.ActivityInfo
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.app.ActivityCompat
@@ -32,6 +33,13 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 app.repository.settings.map(ScreenAwakeOptions::from).distinctUntilChanged()
                     .collect { screenAwake.updateOptions(it) }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.repository.settings.map { it.landscapeEnabled }.distinctUntilChanged().collect { enabled ->
+                    requestedOrientation = if (enabled) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
             }
         }
         lifecycleScope.launch {

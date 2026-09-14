@@ -38,12 +38,19 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   work("2026-08-14",at(15,0,45),at(15,8,30));work("2026-08-15",at(15,20,30),at(16,0,0))
  }
  private suspend fun repairTripDistances(){dao.allTrips().forEach{trip->val points=dao.gpsPointsNow(trip.id);var total=0.0;points.zipWithNext().forEach{(a,b)->val result=FloatArray(1);android.location.Location.distanceBetween(a.latitude,a.longitude,b.latitude,b.longitude,result);if(result[0] in 0f..1000f)total+=result[0]};if(kotlin.math.abs(total-trip.distanceMeters)>1.0)dao.updateTrip(trip.copy(distanceMeters=total))}}
- suspend fun nextAction(dayId:Long,now:Long=System.currentTimeMillis()):EventType { val e=dao.events(dayId); val next=when(e.lastOrNull()?.type){null->EventType.WORK_START;EventType.WORK_START,EventType.TRIP_END->EventType.TRIP_START;EventType.TRIP_START->EventType.TRIP_END;EventType.WORK_END->throw IllegalStateException("A munkanap már lezárult")}; addEvent(dayId,next,now); return next }
+ suspend fun nextAction(dayId:Long,now:Long=System.currentTimeMillis()):EventType { val e=dao.events(dayId); val next=when(e.lastOrNull()?.type){null->EventType.WORK_START;EventType.WORK_START->EventType.TRIP_START;EventType.TRIP_START->EventType.TRIP_END;EventType.TRIP_END->throw IllegalStateException("Egy munkában csak egy út rögzíthető");EventType.WORK_END->throw IllegalStateException("A munkanap már lezárult")}; addEvent(dayId,next,now); return next }
  suspend fun endWork(dayId:Long,now:Long=System.currentTimeMillis()){addEvent(dayId,EventType.WORK_END,now)}
- suspend fun addEvent(dayId:Long,type:EventType,time:Long):Long { val candidate=dao.events(dayId)+WorkEvent(workDayId=dayId,type=type,timestamp=time); validate(candidate); val eventId=dao.insertEvent(WorkEvent(workDayId=dayId,type=type,timestamp=time)); when(type){EventType.TRIP_START->dao.insertTrip(Trip(workDayId=dayId,startEventId=eventId));EventType.TRIP_END->{dao.activeTrip(dayId)?.let{dao.updateTrip(it.copy(endEventId=eventId))}}EventType.WORK_END->runCatching{BackupManager.create(context,automatic=true)};else->Unit}; return eventId }
+ suspend fun addEvent(dayId:Long,type:EventType,time:Long):Long { val candidate=dao.events(dayId)+WorkEvent(workDayId=dayId,type=type,timestamp=time); validate(candidate);if(type==EventType.TRIP_START)optimizePlanAtDeparture(dayId);val eventId=dao.insertEvent(WorkEvent(workDayId=dayId,type=type,timestamp=time)); when(type){EventType.TRIP_START->dao.insertTrip(Trip(workDayId=dayId,startEventId=eventId));EventType.TRIP_END->{dao.activeTrip(dayId)?.let{dao.updateTrip(it.copy(endEventId=eventId))}}EventType.WORK_END->runCatching{BackupManager.create(context,automatic=true)};else->Unit}; return eventId }
+ private suspend fun optimizePlanAtDeparture(dayId:Long)=planMutex.withLock{
+  val places=dao.placesNow();val byId=places.associateBy{it.id};val plans=PlanOrdering.ordered(dao.plansNow(dayId),places);val stops=plans.filter{!it.visited}.mapNotNull{byId[it.placeId]}.filter{it.active&&it.type!=PlaceType.BAKERY&&it.type!=PlaceType.HOME}.toMutableList();if(stops.size<2)return@withLock
+  val base=dao.routeConfigNow(dayId)?.startPlaceId?.let{byId[it]}?:places.firstOrNull{it.active&&(it.type==PlaceType.BAKERY||it.type==PlaceType.HOME)}?:return@withLock
+  val fixed=plans.mapNotNull{p->p.lockedPosition?.let{p.placeId to it}}.toMap();val result=MutableList<LocationPlace?>(stops.size){null};fixed.forEach{(id,pos)->stops.firstOrNull{it.id==id}?.let{if(pos in result.indices)result[pos]=it}}
+  val free=stops.filter{p->result.none{it?.id==p.id}}.toMutableList();var current=base;result.indices.forEach{i->if(result[i]==null){val next=free.minByOrNull{p->val out=FloatArray(1);android.location.Location.distanceBetween(current.latitude?:0.0,current.longitude?:0.0,p.latitude?:0.0,p.longitude?:0.0,out);out[0]}?:return@forEach;result[i]=next;free.remove(next);current=next}else current=result[i]!!}
+  dao.updatePlanPositions(PlanOrdering.reorder(plans,places,result.filterNotNull().map{it.id}))
+ }
  suspend fun updateEvent(event:WorkEvent){val list=dao.events(event.workDayId).map{if(it.id==event.id)event else it};validate(list);dao.updateEvent(event)}
  suspend fun deleteEvent(event:WorkEvent){if(event.type==EventType.WORK_START){context.startService(Intent(context,TrackingService::class.java).setAction(TrackingService.ACTION_STOP));dao.deleteDay(event.workDayId)}else dao.deleteEvent(event)}
- private fun validate(events:List<WorkEvent>){val sorted=events.sortedBy{it.timestamp}; if(sorted!=events.sortedBy{it.timestamp})Unit; var working=false;var travelling=false; sorted.forEach{when(it.type){EventType.WORK_START->{require(!working){"Már van munkakezdés"};working=true};EventType.TRIP_START->{require(working&&!travelling){"Indulás csak aktív munkában lehetséges"};travelling=true};EventType.TRIP_END->{require(travelling){"A visszaérkezés nem előzheti meg az indulást"};travelling=false};EventType.WORK_END->{require(working&&!travelling){"Munka vége csak visszaérkezés után rögzíthető"};working=false}}}}
+ private fun validate(events:List<WorkEvent>){val sorted=events.sortedBy{it.timestamp};require(sorted.count{it.type==EventType.TRIP_START}<=1){"Egy munkában csak egy út rögzíthető"};var working=false;var travelling=false; sorted.forEach{when(it.type){EventType.WORK_START->{require(!working){"Már van munkakezdés"};working=true};EventType.TRIP_START->{require(working&&!travelling){"Indulás csak aktív munkában lehetséges"};travelling=true};EventType.TRIP_END->{require(travelling){"A visszaérkezés nem előzheti meg az indulást"};travelling=false};EventType.WORK_END->{require(working&&!travelling){"Munka vége csak visszaérkezés után rögzíthető"};working=false}}}}
  fun observeDay(id:Long)=dao.observeDay(id); fun plans(id:Long)=combine(dao.observePlans(id),dao.observePlaces()){plans,places->PlanOrdering.ordered(plans,places)}; fun points(id:Long)=dao.observePoints(id)
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
  suspend fun savePlace(v:LocationPlace):Long{val id=if(v.id==0L)dao.insertPlace(v)else{dao.updatePlace(v);v.id};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};return id}
@@ -93,7 +100,17 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  }
  suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>,unlockedPlaceId:Long?=null)=planMutex.withLock{dao.updatePlanPositions(PlanOrdering.reorder(dao.plansNow(dayId),dao.placesNow(),placeIds,unlockedPlaceId))}
  suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?)=planMutex.withLock{val ordered=PlanOrdering.ordered(dao.plansNow(dayId),dao.placesNow());val fullIndex=ordered.indexOfFirst{it.placeId==placeId};if(fullIndex>=0){val updated=ordered.mapIndexed{i,p->p.copy(sortHint=i,lockedPosition=if(p.placeId==placeId){if(position==null)null else i}else if(p.lockedPosition!=null)i else null)};dao.updatePlanPositions(updated)}}
- suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean)=dao.setPlanVisited(dayId,placeId,visited,if(visited)"MANUAL" else null,if(visited)System.currentTimeMillis() else null)
+ suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean){
+  val existing=dao.plansNow(dayId).firstOrNull{it.placeId==placeId}
+  if(visited){
+   val completedAt=System.currentTimeMillis()
+   dao.setPlanVisited(dayId,placeId,true,"MANUAL",completedAt)
+   if(dao.visitCount(dayId,placeId)==0)dao.insertVisit(PlaceVisit(workDayId=dayId,placeId=placeId,arrivalTime=completedAt,departureTime=completedAt,dwellDurationMillis=0))
+  }else{
+   if(existing?.completionMode=="MANUAL")existing.completedAt?.let{dao.deleteManualVisit(dayId,placeId,it)}
+   dao.setPlanVisited(dayId,placeId,false,null,null)
+  }
+ }
  suspend fun nextPlannedStop(dayId:Long,excludePlaceId:Long?=null):LocationPlace?{val places=dao.placesNow();val byId=places.associateBy{it.id};return PlanOrdering.ordered(dao.plansNow(dayId),places).filter{!it.visited&&it.placeId!=excludePlaceId}.firstNotNullOfOrNull{byId[it.placeId]?.takeIf{place->place.active}}}
  suspend fun automaticVisitDelayMillis():Long=(dao.settings()?.automaticVisitDelaySeconds?:30).coerceIn(0,300)*1000L
  suspend fun recordRecognitionDiagnostic(dayId:Long,placeId:Long,diagnostic:String)=dao.recordRecognitionDiagnostic(dayId,placeId,diagnostic)
