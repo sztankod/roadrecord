@@ -11,6 +11,7 @@ class MainViewModel(app:Application):AndroidViewModel(app){
  val days=repo.days.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val settings=repo.settings.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),AppSettings())
  val places=repo.places.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
+ val tourOrderGroups=repo.tourOrderGroups.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  val periods=repo.periods.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000),emptyList())
  private val _message=MutableStateFlow<String?>(null);val message=_message.asStateFlow()
  init{viewModelScope.launch{try{repo.ensureDefaults();repo.seedDemo()}catch(e:Exception){_message.value="A mintaadatok betöltése később újrapróbálható: ${e.message.orEmpty()}"}}}

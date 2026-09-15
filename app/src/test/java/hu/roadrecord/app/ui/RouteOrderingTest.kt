@@ -2,6 +2,7 @@ package hu.roadrecord.app.ui
 
 import hu.roadrecord.app.data.DailyPlacePlan
 import hu.roadrecord.app.data.LocationPlace
+import hu.roadrecord.app.data.TourOrderGroup
 import hu.roadrecord.app.repository.PlanOrdering
 import org.junit.Assert.*
 import org.junit.Test
@@ -105,5 +106,13 @@ class RouteOrderingTest {
         assertEquals((1L..10L).toSet(), saved.map { it.placeId }.toSet())
         assertEquals(10, saved.size)
         assertEquals(10, saved.map { it.sortHint }.distinct().size)
+    }
+
+    @Test fun dynamicGroupsFollowConfiguredGroupAndWithinGroupOrder() {
+        val groups=listOf(TourOrderGroup(11,"Első",0),TourOrderGroup(12,"Utolsó",1))
+        val grouped=places.map{p->when(p.id){1L->p.copy(tourOrderGroupId=11,defaultTourOrder=1);2L->p.copy(tourOrderGroupId=11,defaultTourOrder=0);9L->p.copy(tourOrderGroupId=12,defaultTourOrder=1);10L->p.copy(tourOrderGroupId=12,defaultTourOrder=0);else->p}}
+        val ordered=PlanOrdering.ordered(plans(),grouped,groups)
+        assertEquals(listOf(2L,1L),ordered.take(2).map{it.placeId})
+        assertEquals(listOf(10L,9L),ordered.takeLast(2).map{it.placeId})
     }
 }

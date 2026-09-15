@@ -13,7 +13,7 @@ import android.content.Intent
 
 class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Context){
  private val planMutex=Mutex()
- val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val visits=dao.observeAllVisits(); val settings=dao.observeSettings().map{it?:AppSettings()}
+ val days=dao.observeDays(); val periods=dao.observePeriods(); val places=dao.observePlaces(); val tourOrderGroups=dao.observeTourOrderGroups(); val visits=dao.observeAllVisits(); val settings=dao.observeSettings().map{it?:AppSettings()}
  suspend fun ensureDefaults(){val current=dao.settings()?:AppSettings().also{dao.saveSettings(it)};var updated=current;if(updated.dataResetVersion<1){dao.clearAllWorkDays();updated=updated.copy(dataResetVersion=1)};if(updated.overnightRepairVersion<1){repairAugustOvernightSession();updated=updated.copy(overnightRepairVersion=1)};if(updated.historicalWorkImportVersion<1){importAugustHistoricalWork();updated=updated.copy(historicalWorkImportVersion=1)};repairTripDistances();if(updated!=current)dao.saveSettings(updated);if(dao.activePeriod()==null)dao.insertPeriod(WorkPeriod(startDate=LocalDate.now().toString()))}
  suspend fun activeDay()=dao.openDay()
  private fun workDate(timestamp:Long):String {
@@ -42,18 +42,18 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun endWork(dayId:Long,now:Long=System.currentTimeMillis()){addEvent(dayId,EventType.WORK_END,now)}
  suspend fun addEvent(dayId:Long,type:EventType,time:Long):Long { val candidate=dao.events(dayId)+WorkEvent(workDayId=dayId,type=type,timestamp=time); validate(candidate);if(type==EventType.TRIP_START)optimizePlanAtDeparture(dayId);val eventId=dao.insertEvent(WorkEvent(workDayId=dayId,type=type,timestamp=time)); when(type){EventType.TRIP_START->dao.insertTrip(Trip(workDayId=dayId,startEventId=eventId));EventType.TRIP_END->{dao.activeTrip(dayId)?.let{dao.updateTrip(it.copy(endEventId=eventId))}}EventType.WORK_END->runCatching{BackupManager.create(context,automatic=true)};else->Unit}; return eventId }
  private suspend fun optimizePlanAtDeparture(dayId:Long)=planMutex.withLock{
-  val places=dao.placesNow();val byId=places.associateBy{it.id};val plans=PlanOrdering.ordered(dao.plansNow(dayId),places);val stops=plans.filter{!it.visited}.mapNotNull{byId[it.placeId]}.filter{it.active&&it.type!=PlaceType.BAKERY&&it.type!=PlaceType.HOME}.toMutableList();if(stops.size<2)return@withLock
+  val places=dao.placesNow();val groups=dao.tourOrderGroupsNow();val byId=places.associateBy{it.id};val plans=PlanOrdering.ordered(dao.plansNow(dayId),places,groups);val stops=plans.filter{!it.visited}.mapNotNull{byId[it.placeId]}.filter{it.active&&it.type!=PlaceType.BAKERY&&it.type!=PlaceType.HOME}.toMutableList();if(stops.size<2)return@withLock
   val base=dao.routeConfigNow(dayId)?.startPlaceId?.let{byId[it]}?:places.firstOrNull{it.active&&(it.type==PlaceType.BAKERY||it.type==PlaceType.HOME)}?:return@withLock
   val fixed=plans.mapNotNull{p->p.lockedPosition?.let{p.placeId to it}}.toMap();val result=MutableList<LocationPlace?>(stops.size){null};fixed.forEach{(id,pos)->stops.firstOrNull{it.id==id}?.let{if(pos in result.indices)result[pos]=it}}
   val free=stops.filter{p->result.none{it?.id==p.id}}.toMutableList();var current=base;result.indices.forEach{i->if(result[i]==null){val next=free.minByOrNull{p->val out=FloatArray(1);android.location.Location.distanceBetween(current.latitude?:0.0,current.longitude?:0.0,p.latitude?:0.0,p.longitude?:0.0,out);out[0]}?:return@forEach;result[i]=next;free.remove(next);current=next}else current=result[i]!!}
-  dao.updatePlanPositions(PlanOrdering.reorder(plans,places,result.filterNotNull().map{it.id}))
+  dao.updatePlanPositions(PlanOrdering.reorder(plans,places,result.filterNotNull().map{it.id},groups=groups))
  }
  suspend fun updateEvent(event:WorkEvent){val list=dao.events(event.workDayId).map{if(it.id==event.id)event else it};validate(list);dao.updateEvent(event)}
  suspend fun deleteEvent(event:WorkEvent){if(event.type==EventType.WORK_START){context.startService(Intent(context,TrackingService::class.java).setAction(TrackingService.ACTION_STOP));dao.deleteDay(event.workDayId)}else dao.deleteEvent(event)}
  private fun validate(events:List<WorkEvent>){val sorted=events.sortedBy{it.timestamp};require(sorted.count{it.type==EventType.TRIP_START}<=1){"Egy munkában csak egy út rögzíthető"};var working=false;var travelling=false; sorted.forEach{when(it.type){EventType.WORK_START->{require(!working){"Már van munkakezdés"};working=true};EventType.TRIP_START->{require(working&&!travelling){"Indulás csak aktív munkában lehetséges"};travelling=true};EventType.TRIP_END->{require(travelling){"A visszaérkezés nem előzheti meg az indulást"};travelling=false};EventType.WORK_END->{require(working&&!travelling){"Munka vége csak visszaérkezés után rögzíthető"};working=false}}}}
- fun observeDay(id:Long)=dao.observeDay(id); fun plans(id:Long)=combine(dao.observePlans(id),dao.observePlaces()){plans,places->PlanOrdering.ordered(plans,places)}; fun points(id:Long)=dao.observePoints(id)
+ fun observeDay(id:Long)=dao.observeDay(id); fun plans(id:Long)=combine(dao.observePlans(id),dao.observePlaces(),dao.observeTourOrderGroups()){plans,places,groups->PlanOrdering.ordered(plans,places,groups)}; fun points(id:Long)=dao.observePoints(id)
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
- suspend fun savePlace(v:LocationPlace):Long{val id=if(v.id==0L)dao.insertPlace(v)else{dao.updatePlace(v);v.id};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};return id}
+ suspend fun savePlace(v:LocationPlace):Long{val previous=if(v.id==0L)null else dao.place(v.id);val normalized=if(v.tourOrderGroupId!=null&&previous?.tourOrderGroupId!=v.tourOrderGroupId){val next=dao.placesNow().filter{it.tourOrderGroupId==v.tourOrderGroupId}.maxOfOrNull{it.defaultTourOrder}?.plus(1)?:0;v.copy(defaultTourOrder=next)}else v;val id=if(normalized.id==0L)dao.insertPlace(normalized)else{dao.updatePlace(normalized);normalized.id};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};return id}
  suspend fun saveDefaultTourOrder(startIds:List<Long>,endIds:List<Long>)=planMutex.withLock{
   val starts=startIds.withIndex().associate{it.value to it.index}
   val ends=endIds.withIndex().associate{it.value to it.index}
@@ -64,18 +64,20 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   }
   activeDay()?.let{applyDefaultTourAnchors(it.day.id)}
  }
+ suspend fun createTourOrderGroup(name:String){val groups=dao.tourOrderGroupsNow();dao.insertTourOrderGroup(TourOrderGroup(name=name.trim(),sortOrder=groups.size))}
+ suspend fun renameTourOrderGroup(group:TourOrderGroup,name:String){dao.updateTourOrderGroup(group.copy(name=name.trim()))}
+ suspend fun deleteTourOrderGroup(group:TourOrderGroup)=planMutex.withLock{dao.detachTourOrderGroup(group.id);dao.deleteTourOrderGroup(group);dao.tourOrderGroupsNow().forEachIndexed{i,g->if(g.sortOrder!=i)dao.updateTourOrderGroup(g.copy(sortOrder=i))};activeDay()?.let{applyDefaultTourAnchors(it.day.id)}}
+ suspend fun moveTourOrderGroup(groupId:Long,delta:Int){val groups=dao.tourOrderGroupsNow().toMutableList();val from=groups.indexOfFirst{it.id==groupId};val to=from+delta;if(from>=0&&to in groups.indices){val item=groups.removeAt(from);groups.add(to,item);groups.forEachIndexed{i,g->dao.updateTourOrderGroup(g.copy(sortOrder=i))};activeDay()?.let{applyDefaultTourAnchors(it.day.id)}}}
+ suspend fun saveTourOrderGroups(assignments:Map<Long,List<Long>>)=planMutex.withLock{val positions=assignments.flatMap{(group,ids)->ids.mapIndexed{i,id->id to (group to i)}}.toMap();dao.placesNow().forEach{place->val value=positions[place.id];val updated=place.copy(tourOrderGroupId=value?.first,defaultTourAnchor="NONE",defaultTourOrder=value?.second?:0);if(updated!=place)dao.updatePlace(updated)};activeDay()?.let{applyDefaultTourAnchors(it.day.id)}}
  suspend fun deletePlace(v:LocationPlace)=dao.deletePlace(v)
  suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean)=planMutex.withLock{
   if(selected){val existing=dao.plansNow(dayId);dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=existing.size));reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}
   else{dao.deletePlan(dayId,placeId);reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}
  }
  private suspend fun applyDefaultTourAnchors(dayId:Long){
-  val plans=dao.plansNow(dayId).sortedBy{it.sortHint?:Int.MAX_VALUE};if(plans.isEmpty())return
-  val placeById=dao.placesNow().associateBy{it.id}
-  val starts=plans.filter{placeById[it.placeId]?.defaultTourAnchor=="START"}.sortedBy{placeById[it.placeId]?.defaultTourOrder?:0}
-  val ends=plans.filter{placeById[it.placeId]?.defaultTourAnchor=="END"}.sortedBy{placeById[it.placeId]?.defaultTourOrder?:0}
-  val anchored=(starts+ends).map{it.placeId}.toSet();val middle=plans.filter{it.placeId !in anchored};val arranged=starts+middle+ends
-  dao.updatePlanPositions(arranged.mapIndexed{i,plan->val fixed=placeById[plan.placeId]?.defaultTourAnchor in setOf("START","END");plan.copy(sortHint=i,lockedPosition=if(fixed||plan.lockedPosition!=null)i else null)})
+  val plans=dao.plansNow(dayId);if(plans.isEmpty())return
+  val places=dao.placesNow();val placeById=places.associateBy{it.id};val groups=dao.tourOrderGroupsNow();val arranged=PlanOrdering.ordered(plans,places,groups)
+  dao.updatePlanPositions(arranged.mapIndexed{i,plan->val fixed=placeById[plan.placeId]?.tourOrderGroupId!=null||placeById[plan.placeId]?.defaultTourAnchor in setOf("START","END");plan.copy(sortHint=i,lockedPosition=if(fixed||plan.lockedPosition!=null)i else null)})
  }
  private suspend fun reapplyPreviousLocks(dayId:Long){
   val previous=dao.previousDayPlans(dayId).sortedBy{it.sortHint?:Int.MAX_VALUE};if(previous.isEmpty())return
@@ -98,8 +100,8 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   reordered.indices.forEach{i->if(reordered[i]==null&&free.hasNext())reordered[i]=free.next()}
   dao.updatePlanPositions(reordered.filterNotNull().mapIndexed{i,plan->plan.copy(sortHint=i,lockedPosition=assigned[plan.placeId])})
  }
- suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>,unlockedPlaceId:Long?=null)=planMutex.withLock{dao.updatePlanPositions(PlanOrdering.reorder(dao.plansNow(dayId),dao.placesNow(),placeIds,unlockedPlaceId))}
- suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?)=planMutex.withLock{val ordered=PlanOrdering.ordered(dao.plansNow(dayId),dao.placesNow());val fullIndex=ordered.indexOfFirst{it.placeId==placeId};if(fullIndex>=0){val updated=ordered.mapIndexed{i,p->p.copy(sortHint=i,lockedPosition=if(p.placeId==placeId){if(position==null)null else i}else if(p.lockedPosition!=null)i else null)};dao.updatePlanPositions(updated)}}
+ suspend fun savePlanOrder(dayId:Long,placeIds:List<Long>,unlockedPlaceId:Long?=null)=planMutex.withLock{dao.updatePlanPositions(PlanOrdering.reorder(dao.plansNow(dayId),dao.placesNow(),placeIds,unlockedPlaceId,dao.tourOrderGroupsNow()))}
+ suspend fun setPlanLock(dayId:Long,placeId:Long,position:Int?)=planMutex.withLock{val ordered=PlanOrdering.ordered(dao.plansNow(dayId),dao.placesNow(),dao.tourOrderGroupsNow());val fullIndex=ordered.indexOfFirst{it.placeId==placeId};if(fullIndex>=0){val updated=ordered.mapIndexed{i,p->p.copy(sortHint=i,lockedPosition=if(p.placeId==placeId){if(position==null)null else i}else if(p.lockedPosition!=null)i else null)};dao.updatePlanPositions(updated)}}
  suspend fun setPlanVisited(dayId:Long,placeId:Long,visited:Boolean){
   val existing=dao.plansNow(dayId).firstOrNull{it.placeId==placeId}
   if(visited){
@@ -111,7 +113,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
    dao.setPlanVisited(dayId,placeId,false,null,null)
   }
  }
- suspend fun nextPlannedStop(dayId:Long,excludePlaceId:Long?=null):LocationPlace?{val places=dao.placesNow();val byId=places.associateBy{it.id};return PlanOrdering.ordered(dao.plansNow(dayId),places).filter{!it.visited&&it.placeId!=excludePlaceId}.firstNotNullOfOrNull{byId[it.placeId]?.takeIf{place->place.active}}}
+ suspend fun nextPlannedStop(dayId:Long,excludePlaceId:Long?=null):LocationPlace?{val places=dao.placesNow();val byId=places.associateBy{it.id};return PlanOrdering.ordered(dao.plansNow(dayId),places,dao.tourOrderGroupsNow()).filter{!it.visited&&it.placeId!=excludePlaceId}.firstNotNullOfOrNull{byId[it.placeId]?.takeIf{place->place.active}}}
  suspend fun automaticVisitDelayMillis():Long=(dao.settings()?.automaticVisitDelaySeconds?:30).coerceIn(0,300)*1000L
  suspend fun recordRecognitionDiagnostic(dayId:Long,placeId:Long,diagnostic:String)=dao.recordRecognitionDiagnostic(dayId,placeId,diagnostic)
  suspend fun previewCurrentStop(placeId:Long?,distanceMeters:Double?){dao.settings()?.let{if(it.currentPlaceId!=placeId||it.currentPlaceDistanceMeters!=distanceMeters)dao.saveSettings(it.copy(currentPlaceId=placeId,currentPlaceDistanceMeters=distanceMeters))}}

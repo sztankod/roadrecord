@@ -38,6 +38,12 @@ import kotlinx.coroutines.flow.Flow
  @Insert suspend fun insertPlace(v:LocationPlace):Long
  @Update suspend fun updatePlace(v:LocationPlace)
  @Delete suspend fun deletePlace(v:LocationPlace)
+ @Query("SELECT * FROM tour_order_groups ORDER BY sortOrder,id") fun observeTourOrderGroups():Flow<List<TourOrderGroup>>
+ @Query("SELECT * FROM tour_order_groups ORDER BY sortOrder,id") suspend fun tourOrderGroupsNow():List<TourOrderGroup>
+ @Insert suspend fun insertTourOrderGroup(v:TourOrderGroup):Long
+ @Update suspend fun updateTourOrderGroup(v:TourOrderGroup)
+ @Query("UPDATE places SET tourOrderGroupId=NULL, defaultTourAnchor='NONE', defaultTourOrder=0 WHERE tourOrderGroupId=:groupId") suspend fun detachTourOrderGroup(groupId:Long)
+ @Delete suspend fun deleteTourOrderGroup(v:TourOrderGroup)
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") fun observePlans(dayId:Long):Flow<List<DailyPlacePlan>>
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") suspend fun plansNow(dayId:Long):List<DailyPlacePlan>
  @Query("SELECT p.* FROM daily_place_plans p INNER JOIN work_days d ON d.id=p.workDayId WHERE p.placeId=:placeId AND p.workDayId!=:dayId ORDER BY d.createdAt DESC LIMIT 1") suspend fun previousPlan(placeId:Long,dayId:Long):DailyPlacePlan?
