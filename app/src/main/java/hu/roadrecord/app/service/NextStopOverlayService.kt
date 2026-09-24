@@ -8,6 +8,7 @@ import android.graphics.PixelFormat
 import android.graphics.Point
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
@@ -19,6 +20,7 @@ import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import hu.roadrecord.app.MainActivity
 import hu.roadrecord.app.RoadRecordApplication
 import hu.roadrecord.app.ui.widget.DrivingAnimationView
@@ -42,6 +44,8 @@ class NextStopOverlayService : Service() {
         const val ACTION_RESUME = "hu.roadrecord.overlay.RESUME"
         const val EXTRA_NAME = "name"
         const val EXTRA_ADDRESS = "address"
+        const val EXTRA_LATITUDE = "latitude"
+        const val EXTRA_LONGITUDE = "longitude"
         const val EXTRA_CURRENT_NAME = "current_name"
         const val EXTRA_CURRENT_ADDRESS = "current_address"
         const val EXTRA_PIN_NEXT = "pin_next"
@@ -75,14 +79,19 @@ class NextStopOverlayService : Service() {
     private var addressView: TextView? = null
     private var drivingView: DrivingAnimationView? = null
     private var currentTitleView: TextView? = null
+    private var nextColumnView: View? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var tripActive = false
     private var currentName = "Úton"
     private var currentAddress = ""
     private var nextName = "Nincs további megálló"
     private var nextAddress = ""
+    private var nextLatitude: Double? = null
+    private var nextLongitude: Double? = null
     private var pinnedNextName = ""
     private var pinnedNextAddress = ""
+    private var pinnedNextLatitude: Double? = null
+    private var pinnedNextLongitude: Double? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -137,37 +146,58 @@ class NextStopOverlayService : Service() {
         if (pinnedNextName.isNotBlank() && incomingCurrent == pinnedNextName) {
             pinnedNextName = ""
             pinnedNextAddress = ""
+            pinnedNextLatitude = null
+            pinnedNextLongitude = null
         }
         incomingCurrent?.let { currentName = it.ifBlank { "Úton" } }
         intent.getStringExtra(EXTRA_CURRENT_ADDRESS)?.let { currentAddress = it }
         if (intent.getBooleanExtra(EXTRA_PIN_NEXT, false)) {
             pinnedNextName = intent.getStringExtra(EXTRA_NAME).orEmpty()
             pinnedNextAddress = intent.getStringExtra(EXTRA_ADDRESS).orEmpty()
+            pinnedNextLatitude = intent.coordinateExtra(EXTRA_LATITUDE)
+            pinnedNextLongitude = intent.coordinateExtra(EXTRA_LONGITUDE)
         }
         if (pinnedNextName.isNotBlank()) {
             nextName = pinnedNextName
             nextAddress = pinnedNextAddress
+            nextLatitude = pinnedNextLatitude
+            nextLongitude = pinnedNextLongitude
         } else {
-            intent.getStringExtra(EXTRA_NAME)?.let { nextName = it.ifBlank { "Nincs további megálló" } }
-            intent.getStringExtra(EXTRA_ADDRESS)?.let { nextAddress = it }
+            if (intent.hasExtra(EXTRA_NAME) || intent.hasExtra(EXTRA_ADDRESS)) {
+                intent.getStringExtra(EXTRA_NAME)?.let { nextName = it.ifBlank { "Nincs további megálló" } }
+                intent.getStringExtra(EXTRA_ADDRESS)?.let { nextAddress = it }
+                nextLatitude = intent.coordinateExtra(EXTRA_LATITUDE)
+                nextLongitude = intent.coordinateExtra(EXTRA_LONGITUDE)
+            }
         }
         prefs.edit()
             .putString("current_name", currentName)
             .putString("current_address", currentAddress)
             .putString("next_name", nextName)
             .putString("next_address", nextAddress)
+            .putString("next_latitude", nextLatitude?.toString())
+            .putString("next_longitude", nextLongitude?.toString())
             .putString("pinned_next_name", pinnedNextName)
             .putString("pinned_next_address", pinnedNextAddress)
+            .putString("pinned_next_latitude", pinnedNextLatitude?.toString())
+            .putString("pinned_next_longitude", pinnedNextLongitude?.toString())
             .apply()
     }
+
+    private fun Intent.coordinateExtra(key: String): Double? =
+        if (hasExtra(key)) getDoubleExtra(key, Double.NaN).takeIf { it.isFinite() } else null
 
     private fun restoreContent() {
         currentName = prefs.getString("current_name", currentName) ?: currentName
         currentAddress = prefs.getString("current_address", currentAddress) ?: currentAddress
         nextName = prefs.getString("next_name", nextName) ?: nextName
         nextAddress = prefs.getString("next_address", nextAddress) ?: nextAddress
+        nextLatitude = prefs.getString("next_latitude", null)?.toDoubleOrNull()
+        nextLongitude = prefs.getString("next_longitude", null)?.toDoubleOrNull()
         pinnedNextName = prefs.getString("pinned_next_name", pinnedNextName) ?: pinnedNextName
         pinnedNextAddress = prefs.getString("pinned_next_address", pinnedNextAddress) ?: pinnedNextAddress
+        pinnedNextLatitude = prefs.getString("pinned_next_latitude", null)?.toDoubleOrNull()
+        pinnedNextLongitude = prefs.getString("pinned_next_longitude", null)?.toDoubleOrNull()
     }
 
     private fun renderContent() {
@@ -180,6 +210,7 @@ class NextStopOverlayService : Service() {
         currentAddressView?.visibility = if (isOnRoad && currentAddress.isBlank()) View.GONE else View.VISIBLE
         nameView?.text = nextName
         addressView?.text = nextAddress
+        nextColumnView?.contentDescription = "Navigáció a következő megállóhoz: $nextName"
         drivingView?.visibility = if (isOnRoad) View.VISIBLE else View.GONE
         drivingView?.motionEnabled = isOnRoad
     }
@@ -219,7 +250,11 @@ class NextStopOverlayService : Service() {
             currentTitleView = getChildAt(0) as TextView
             addView(drivingView, LinearLayout.LayoutParams(-1, (36 * density).roundToInt()))
         }
-        val next = stopColumn("KÖVETKEZŐ", nameView!!, addressView!!)
+        val next = stopColumn("KÖVETKEZŐ", nameView!!, addressView!!).apply {
+            isClickable = true
+            isFocusable = true
+            nextColumnView = this
+        }
         renderContent()
         val back = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_revert)
@@ -280,17 +315,16 @@ class NextStopOverlayService : Service() {
                 blurBehindRadius = (6 * density).roundToInt()
             }
         }
-        val drag = dragListener()
-        current.setOnTouchListener(drag)
-        drivingView?.setOnTouchListener(drag)
-        next.setOnTouchListener(drag)
+        current.setOnTouchListener(dragListener(::openRoadRecord))
+        drivingView?.setOnTouchListener(dragListener(::openRoadRecord))
+        next.setOnTouchListener(dragListener(::openNextInWaze))
         windowManager.addView(container, params)
         root = container
         visible = true
         container.post { correctPosition() }
     }
 
-    private fun dragListener(): View.OnTouchListener {
+    private fun dragListener(onTap: () -> Unit): View.OnTouchListener {
         var startRawY = 0f
         var startY = 0
         var moved = false
@@ -315,7 +349,7 @@ class NextStopOverlayService : Service() {
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     params?.y?.let { prefs.edit().putInt("y", it).apply() }
-                    if (!moved && event.actionMasked == MotionEvent.ACTION_UP) openRoadRecord()
+                    if (!moved && event.actionMasked == MotionEvent.ACTION_UP) onTap()
                     true
                 }
 
@@ -330,6 +364,28 @@ class NextStopOverlayService : Service() {
                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP,
             ),
         )
+    }
+
+    private fun openNextInWaze() {
+        val coordinatesValid = nextLatitude?.let { it in -90.0..90.0 } == true &&
+            nextLongitude?.let { it in -180.0..180.0 } == true
+        val target = if (coordinatesValid) {
+            "ll=$nextLatitude,$nextLongitude"
+        } else {
+            val query = nextAddress.ifBlank { nextName }
+            if (query.isBlank() || query == "Nincs további megálló") {
+                Toast.makeText(this, "Nincs megnyitható következő megálló.", Toast.LENGTH_SHORT).show()
+                return
+            }
+            "q=${Uri.encode(query)}"
+        }
+        val appUri = Uri.parse("waze://?$target&navigate=yes")
+        val webUri = Uri.parse("https://waze.com/ul?$target&navigate=yes")
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, appUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure {
+            startActivity(Intent(Intent.ACTION_VIEW, webUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
     }
 
     private fun safeBounds(): Pair<Int, Int> = if (Build.VERSION.SDK_INT >= 30) {
@@ -374,6 +430,7 @@ class NextStopOverlayService : Service() {
         params = null
         drivingView = null
         currentTitleView = null
+        nextColumnView = null
         visible = false
     }
 

@@ -24,6 +24,11 @@ import kotlinx.coroutines.flow.Flow
  @Delete suspend fun deleteEvent(v:WorkEvent)
  @Insert suspend fun insertTrip(v:Trip):Long
  @Update suspend fun updateTrip(v:Trip)
+ @Query("SELECT * FROM trips WHERE endEventId=:eventId LIMIT 1") suspend fun tripEndedBy(eventId:Long):Trip?
+ @Query("SELECT COUNT(*) FROM work_events WHERE workDayId=:dayId AND type='WORK_END'") suspend fun workEndCount(dayId:Long):Int
+ @Query("SELECT COUNT(*) FROM work_events WHERE workDayId=:dayId AND (timestamp>:timestamp OR (timestamp=:timestamp AND id>:eventId))") suspend fun laterEventCount(dayId:Long,timestamp:Long,eventId:Long):Int
+ @Transaction suspend fun deleteEventAndReopenTrip(v:WorkEvent){if(workEndCount(v.workDayId)==0&&laterEventCount(v.workDayId,v.timestamp,v.id)==0)tripEndedBy(v.id)?.let{updateTrip(hu.roadrecord.app.repository.reopenTripForDeletedEvent(it,v))};deleteEvent(v)}
+ @Query("UPDATE trips SET endEventId=NULL WHERE endEventId IS NOT NULL AND NOT EXISTS(SELECT 1 FROM work_events missing WHERE missing.id=trips.endEventId) AND EXISTS(SELECT 1 FROM work_days d WHERE d.id=trips.workDayId AND NOT EXISTS(SELECT 1 FROM work_events ended WHERE ended.workDayId=d.id AND ended.type='WORK_END')) AND (SELECT latest.type FROM work_events latest WHERE latest.workDayId=trips.workDayId ORDER BY latest.timestamp DESC,latest.id DESC LIMIT 1)='TRIP_START'") suspend fun reopenDanglingTripsOnOpenDays()
  @Query("SELECT * FROM trips WHERE workDayId=:dayId AND endEventId IS NULL LIMIT 1") suspend fun activeTrip(dayId:Long):Trip?
  @Insert suspend fun insertGpsPoint(v:GpsPoint)
  @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp DESC LIMIT 1") suspend fun lastGpsPoint(tripId:Long):GpsPoint?

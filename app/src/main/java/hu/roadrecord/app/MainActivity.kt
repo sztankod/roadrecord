@@ -3,6 +3,7 @@ package hu.roadrecord.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,6 +14,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import hu.roadrecord.app.display.ScreenAwakeController
 import hu.roadrecord.app.display.ScreenAwakeOptions
 import hu.roadrecord.app.ui.RoadRecordApp
+import hu.roadrecord.app.service.TrackingService
 import hu.roadrecord.app.theme.ThemeStore
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -50,6 +52,16 @@ class MainActivity : ComponentActivity() {
                     // last event is TRIP_END, but that must not silently cancel dimming/keep-awake.
                     days.any { day -> day.events.none { it.type == hu.roadrecord.app.data.EventType.WORK_END } }
                 }.distinctUntilChanged().collect { screenAwake.updateTripActive(it) }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.repository.days.map { days ->
+                    days.firstOrNull { day -> day.events.none { it.type == hu.roadrecord.app.data.EventType.WORK_END } }?.day?.id
+                }.distinctUntilChanged().collect { openDayId ->
+                    openDayId?.let { startForegroundService(Intent(this@MainActivity, TrackingService::class.java)
+                        .setAction(TrackingService.ACTION_START).putExtra(TrackingService.EXTRA_DAY, it)) }
+                }
             }
         }
     }
