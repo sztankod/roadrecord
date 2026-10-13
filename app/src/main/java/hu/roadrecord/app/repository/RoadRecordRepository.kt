@@ -11,6 +11,9 @@ import hu.roadrecord.app.backup.BackupManager
 import hu.roadrecord.app.backup.StopPdfManager
 import hu.roadrecord.app.service.TrackingService
 import android.content.Intent
+import hu.roadrecord.app.weather.WeatherData
+import hu.roadrecord.app.backup.PhotoBackupManager
+import java.io.File
 
 class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Context){
  private val planMutex=Mutex()
@@ -54,7 +57,8 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  private fun validate(events:List<WorkEvent>){val sorted=events.sortedBy{it.timestamp};require(sorted.count{it.type==EventType.TRIP_START}<=1){"Egy munkában csak egy út rögzíthető"};var working=false;var travelling=false; sorted.forEach{when(it.type){EventType.WORK_START->{require(!working){"Már van munkakezdés"};working=true};EventType.TRIP_START->{require(working&&!travelling){"Indulás csak aktív munkában lehetséges"};travelling=true};EventType.TRIP_END->{require(travelling){"A visszaérkezés nem előzheti meg az indulást"};travelling=false};EventType.WORK_END->{require(working&&!travelling){"Munka vége csak visszaérkezés után rögzíthető"};working=false}}}}
  fun observeDay(id:Long)=dao.observeDay(id); fun plans(id:Long)=combine(dao.observePlans(id),dao.observePlaces(),dao.observeTourOrderGroups()){plans,places,groups->PlanOrdering.ordered(plans,places,groups)}; fun points(id:Long)=dao.observePoints(id)
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
- suspend fun savePlace(v:LocationPlace):Long{val previous=if(v.id==0L)null else dao.place(v.id);val normalized=if(v.tourOrderGroupId!=null&&previous?.tourOrderGroupId!=v.tourOrderGroupId){val next=dao.placesNow().filter{it.tourOrderGroupId==v.tourOrderGroupId}.maxOfOrNull{it.defaultTourOrder}?.plus(1)?:0;v.copy(defaultTourOrder=next)}else v;val id=if(normalized.id==0L)dao.insertPlace(normalized)else{dao.updatePlace(normalized);normalized.id};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};runCatching{StopPdfManager.request(context,StopPdfManager.TRIGGER_CHANGE)};return id}
+ suspend fun saveWeather(v:WeatherData)=dao.updateWeather(v.tempC,v.feelsLikeC,v.conditionCode,v.conditionText,v.locationName,v.providerUpdated,v.fetchedAt)
+ suspend fun savePlace(v:LocationPlace):Long{val previous=if(v.id==0L)null else dao.place(v.id);val normalized=if(v.tourOrderGroupId!=null&&previous?.tourOrderGroupId!=v.tourOrderGroupId){val next=dao.placesNow().filter{it.tourOrderGroupId==v.tourOrderGroupId}.maxOfOrNull{it.defaultTourOrder}?.plus(1)?:0;v.copy(defaultTourOrder=next)}else v;val photoChanged=previous?.photoPath!=normalized.photoPath||previous?.entrancePhotoPath!=normalized.entrancePhotoPath;val id=if(normalized.id==0L)dao.insertPlace(normalized)else{dao.updatePlace(normalized);normalized.id};if(photoChanged){cleanupUnusedPhotos(listOfNotNull(previous?.photoPath,previous?.entrancePhotoPath));runCatching{PhotoBackupManager.request(context)}};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};runCatching{StopPdfManager.request(context,StopPdfManager.TRIGGER_CHANGE)};return id}
  suspend fun saveDefaultTourOrder(startIds:List<Long>,endIds:List<Long>)=planMutex.withLock{
   val starts=startIds.withIndex().associate{it.value to it.index}
   val ends=endIds.withIndex().associate{it.value to it.index}
@@ -70,7 +74,8 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun deleteTourOrderGroup(group:TourOrderGroup)=planMutex.withLock{dao.detachTourOrderGroup(group.id);dao.deleteTourOrderGroup(group);dao.tourOrderGroupsNow().forEachIndexed{i,g->if(g.sortOrder!=i)dao.updateTourOrderGroup(g.copy(sortOrder=i))};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};runCatching{StopPdfManager.request(context,StopPdfManager.TRIGGER_CHANGE)}}
  suspend fun moveTourOrderGroup(groupId:Long,delta:Int){val groups=dao.tourOrderGroupsNow().toMutableList();val from=groups.indexOfFirst{it.id==groupId};val to=from+delta;if(from>=0&&to in groups.indices){val item=groups.removeAt(from);groups.add(to,item);groups.forEachIndexed{i,g->dao.updateTourOrderGroup(g.copy(sortOrder=i))};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};runCatching{StopPdfManager.request(context,StopPdfManager.TRIGGER_CHANGE)}}}
  suspend fun saveTourOrderGroups(assignments:Map<Long,List<Long>>)=planMutex.withLock{val positions=assignments.flatMap{(group,ids)->ids.mapIndexed{i,id->id to (group to i)}}.toMap();dao.placesNow().forEach{place->val value=positions[place.id];val updated=place.copy(tourOrderGroupId=value?.first,defaultTourAnchor="NONE",defaultTourOrder=value?.second?:0);if(updated!=place)dao.updatePlace(updated)};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};runCatching{StopPdfManager.request(context,StopPdfManager.TRIGGER_CHANGE)}}
- suspend fun deletePlace(v:LocationPlace){dao.deletePlace(v);runCatching{StopPdfManager.request(context,StopPdfManager.TRIGGER_CHANGE)}}
+ suspend fun deletePlace(v:LocationPlace){dao.deletePlace(v);cleanupUnusedPhotos(listOfNotNull(v.photoPath,v.entrancePhotoPath));runCatching{PhotoBackupManager.request(context)};runCatching{StopPdfManager.request(context,StopPdfManager.TRIGGER_CHANGE)}}
+ private suspend fun cleanupUnusedPhotos(candidates:List<String>){val used=dao.placesNow().flatMap{listOfNotNull(it.photoPath,it.entrancePhotoPath)}.toSet();candidates.filterNot{it in used}.forEach{runCatching{File(it).delete()}}}
  suspend fun togglePlan(dayId:Long,placeId:Long,selected:Boolean)=planMutex.withLock{
   if(selected){val existing=dao.plansNow(dayId);dao.upsertPlan(DailyPlacePlan(dayId,placeId,sortHint=existing.size));reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}
   else{dao.deletePlan(dayId,placeId);reapplyPreviousLocks(dayId);applyDefaultTourAnchors(dayId)}

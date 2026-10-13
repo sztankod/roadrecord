@@ -70,9 +70,12 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM app_settings WHERE id=1") fun observeSettings():Flow<AppSettings?>
  @Query("SELECT * FROM app_settings WHERE id=1") suspend fun settings():AppSettings?
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveSettings(v:AppSettings)
+ @Query("UPDATE app_settings SET weatherTempC=:tempC,weatherFeelsLikeC=:feelsLikeC,weatherConditionCode=:conditionCode,weatherConditionText=:conditionText,weatherLocationName=:locationName,weatherProviderUpdated=:providerUpdated,weatherFetchedAt=:fetchedAt WHERE id=1")
+ suspend fun updateWeather(tempC:Double,feelsLikeC:Double,conditionCode:Int,conditionText:String,locationName:String,providerUpdated:String,fetchedAt:Long)
  @Query("UPDATE app_settings SET lastBackupAt=:time,lastLocalBackupWorkDayId=:dayId WHERE id=1") suspend fun markLocalBackup(time:Long,dayId:Long?)
  @Query("UPDATE app_settings SET lastBackupAt=:time,lastDriveBackupWorkDayId=:dayId WHERE id=1") suspend fun markDriveBackup(time:Long,dayId:Long?)
  @Query("UPDATE app_settings SET lastStopPdfAt=:time WHERE id=1") suspend fun markStopPdf(time:Long)
+ @Query("UPDATE app_settings SET lastPhotoBackupSignature=:signature,lastPhotoBackupAt=:time WHERE id=1") suspend fun markPhotoBackup(signature:String,time:Long)
  @Query("SELECT COUNT(*) FROM work_days") suspend fun dayCount():Int
  @Query("SELECT COUNT(*) FROM gps_points WHERE latitude >= 47.70") suspend fun northernDemoPointCount():Int
  @Query("DELETE FROM work_days") suspend fun clearAllWorkDays()

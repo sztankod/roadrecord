@@ -13,8 +13,12 @@ android {
         applicationId = "hu.roadrecord.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 153
-        versionName = "1.51"
+        versionCode = 154
+        versionName = "1.52"
+        val weatherApiKey = providers.gradleProperty("WEATHER_API_KEY").orNull ?: System.getenv("WEATHER_API_KEY") ?: ""
+        val weatherProxyUrl = providers.gradleProperty("WEATHER_PROXY_URL").orNull ?: System.getenv("WEATHER_PROXY_URL") ?: ""
+        buildConfigField("String", "WEATHER_API_KEY", "\"${weatherApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "WEATHER_PROXY_URL", "\"${weatherProxyUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
     val stableKeystore = System.getenv("ROADRECORD_KEYSTORE")
     signingConfigs {

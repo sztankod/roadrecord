@@ -44,6 +44,8 @@ jobs:
           ROADRECORD_STORE_PASSWORD: ${{ secrets.ROADRECORD_STORE_PASSWORD }}
           ROADRECORD_KEY_ALIAS: ${{ secrets.ROADRECORD_KEY_ALIAS }}
           ROADRECORD_KEY_PASSWORD: ${{ secrets.ROADRECORD_KEY_PASSWORD }}
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+          WEATHER_PROXY_URL: ${{ secrets.WEATHER_PROXY_URL }}
         run: ./gradlew :app:assembleRelease --no-daemon
 
       - name: Verzió és letöltőfájlok előkészítése

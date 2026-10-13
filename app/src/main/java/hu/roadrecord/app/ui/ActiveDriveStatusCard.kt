@@ -40,12 +40,7 @@ internal fun ActiveDriveStatusCard() {
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
     val bandHeight = DrivingLayout.mainBandHeight(maxWidth.value).dp
-    Card(
-        modifier = Modifier.fillMaxWidth().height(bandHeight),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = RoadSurfaceElevated),
-        border = BorderStroke(1.dp, RoadCardBorder),
-    ) {
+    Column(modifier = Modifier.fillMaxWidth().height(bandHeight)) {
         Row(Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp).heightIn(min = 26.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(Modifier.size(24.dp), shape = CircleShape, color = Color.Transparent,
                 border = BorderStroke(1.dp, RoadAccentGreen.copy(alpha = .38f))) {

@@ -50,8 +50,6 @@ object BackupManager {
         val temp=File(context.cacheDir,"roadrecord-backup-${workDayId?:"manual"}.zip")
         ZipOutputStream(temp.outputStream().buffered()).use{zip->
             addFile(zip,context.getDatabasePath("roadrecord.db"),"database/roadrecord.db")
-            val photos=File(context.filesDir,"photos")
-            photos.listFiles()?.filter{it.isFile}?.forEach{addFile(zip,it,"photos/${it.name}")}
         }
         val now=System.currentTimeMillis();val name="roadrecord-backup-${LocalDateTime.now().format(stamp)}.zip"
         if(!driveOnly&&!localAlreadySaved){
@@ -63,7 +61,7 @@ object BackupManager {
             val uploaded=runCatching{val tree=DocumentFile.fromTreeUri(context,Uri.parse(settings.backupDriveTreeUri))?:error("A Drive-mappa nem érhető el");val file=tree.createFile("application/zip",name)?:error("A Drive-fájl nem hozható létre");context.contentResolver.openOutputStream(file.uri)?.use{out->temp.inputStream().use{it.copyTo(out)}}?:error("A Drive-fájl nem írható");pruneDriveBackups(tree,settings.backupRetentionCount)}.isSuccess
             if(uploaded)app.database.dao().markDriveBackup(now,workDayId) else {temp.delete();return@withLock false}
         }else if(driveDue&&settings.backupDriveTreeUri.isNotBlank())enqueuePendingDrive(context,workDayId)
-        temp.delete();true
+        temp.delete();runCatching{PhotoBackupManager.request(context)};true
     }}
 
     private fun enqueuePendingDrive(context:Context,workDayId:Long?){
@@ -85,7 +83,8 @@ object BackupManager {
     suspend fun restore(context:Context,uri:Uri):Nothing=withContext(Dispatchers.IO){
         val stage=File(context.cacheDir,"restore-${System.currentTimeMillis()}").apply{mkdirs()}
         context.contentResolver.openInputStream(uri)?.use{input->ZipInputStream(input.buffered()).use{zip->var entry=zip.nextEntry;while(entry!=null){val out=File(stage,entry.name);require(out.canonicalPath.startsWith(stage.canonicalPath+File.separator));if(entry.isDirectory)out.mkdirs()else{out.parentFile?.mkdirs();out.outputStream().use{zip.copyTo(it)}};entry=zip.nextEntry}}}?:error("A mentés nem olvasható.")
-        val db=File(stage,"database/roadrecord.db");require(db.exists()){"Ez nem RoadRecord biztonsági mentés."}
+        val db=File(stage,"database/roadrecord.db");val restoredPhotos=File(stage,"photos").listFiles()?.filter{it.isFile}.orEmpty();require(db.exists()||restoredPhotos.isNotEmpty()){"Ez nem RoadRecord biztonsági mentés."}
+        if(!db.exists()){val photoTarget=File(context.filesDir,"photos").apply{mkdirs()};restoredPhotos.forEach{it.copyTo(File(photoTarget,it.name),true)};val restart=Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK);PendingIntent.getActivity(context,991,restart,PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT).send();exitProcess(0)}
         RoadRecordDatabase.closeForRestore();val target=context.getDatabasePath("roadrecord.db");target.parentFile?.mkdirs();db.copyTo(target,true);File(target.path+"-wal").delete();File(target.path+"-shm").delete()
         val photoTarget=File(context.filesDir,"photos").apply{mkdirs()};File(stage,"photos").listFiles()?.forEach{it.copyTo(File(photoTarget,it.name),true)}
         val restart=Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK);PendingIntent.getActivity(context,991,restart,PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT).send();exitProcess(0)
