@@ -54,6 +54,7 @@ jobs:
           VERSION="$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n1)"
           VERSION_CODE="$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts | head -n1)"
           test -n "$VERSION" && test -n "$VERSION_CODE"
+          find download-site/apk -maxdepth 1 -type f -name '*.apk' -delete
           cp app/build/outputs/apk/release/app-release.apk download-site/apk/roadrecord-latest.apk
           cp app/build/outputs/apk/release/app-release.apk "download-site/apk/roadrecord-v${VERSION}.apk"
           printf '{"versionCode":%s,"versionName":"%s","apkUrl":"http://roadrecord.widor.nhely.hu/apk/roadrecord-v%s.apk"}\n' "$VERSION_CODE" "$VERSION" "$VERSION" > download-site/version.json
@@ -89,6 +90,18 @@ jobs:
         shell: bash
         run: |
           test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          curl --fail --silent --show-error --list-only \
+            --user "$FTP_USERNAME:$FTP_PASSWORD" \
+            "ftp://${FTP_SERVER}/apk/" | tr -d '\r' | while IFS= read -r name; do
+              case "$name" in
+                roadrecord-*.apk)
+                  if [ "$name" != "roadrecord-latest.apk" ] && [ "$name" != "roadrecord-v${VERSION}.apk" ]; then
+                      curl --fail --silent --show-error --user "$FTP_USERNAME:$FTP_PASSWORD" \
+                        --quote "DELE $name" "ftp://${FTP_SERVER}/apk/" >/dev/null
+                  fi
+                  ;;
+              esac
+          done
           find download-site -type f -print0 | while IFS= read -r -d '' file; do
             relative="${file#download-site/}"
             curl --fail --silent --show-error --ftp-create-dirs \

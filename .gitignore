@@ -10,3 +10,4 @@ captures/
 .externalNativeBuild/
 .cxx/
 roadrecord-nethely-upload.zip
+download-site/apk/*.apk
