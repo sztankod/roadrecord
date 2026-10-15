@@ -97,7 +97,7 @@ jobs:
                 roadrecord-*.apk)
                   if [ "$name" != "roadrecord-latest.apk" ] && [ "$name" != "roadrecord-v${VERSION}.apk" ]; then
                       curl --fail --silent --show-error --user "$FTP_USERNAME:$FTP_PASSWORD" \
-                        --quote "DELE $name" "ftp://${FTP_SERVER}/apk/" >/dev/null
+                        --quote "DELE /apk/$name" "ftp://${FTP_SERVER}/" >/dev/null
                   fi
                   ;;
               esac
