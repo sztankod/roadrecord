@@ -1,6 +1,7 @@
 package hu.roadrecord.app.backup
 
 import android.app.PendingIntent
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -54,8 +55,8 @@ object BackupManager {
         val now=System.currentTimeMillis();val name="roadrecord-backup-${LocalDateTime.now().format(stamp)}.zip"
         if(!driveOnly&&!localAlreadySaved){
             val values=ContentValues().apply{put(MediaStore.MediaColumns.DISPLAY_NAME,name);put(MediaStore.MediaColumns.MIME_TYPE,"application/zip");put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_DOWNLOADS+"/RoadRecord")}
-            context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values)?.let{uri->context.contentResolver.openOutputStream(uri)?.use{out->temp.inputStream().use{it.copyTo(out)}}}
-            app.database.dao().markLocalBackup(now,workDayId)
+            val saved=context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values)?.let{uri->runCatching{context.contentResolver.openOutputStream(uri)?.use{out->temp.inputStream().use{it.copyTo(out)}}?:error("A helyi mentés nem írható")}.isSuccess}==true
+            if(saved){pruneLocalBackups(context,settings.backupRetentionCount);app.database.dao().markLocalBackup(now,workDayId)}
         }
         if(copyToDrive&&settings.backupDriveTreeUri.isNotBlank()){
             val uploaded=runCatching{val tree=DocumentFile.fromTreeUri(context,Uri.parse(settings.backupDriveTreeUri))?:error("A Drive-mappa nem érhető el");val file=tree.createFile("application/zip",name)?:error("A Drive-fájl nem hozható létre");context.contentResolver.openOutputStream(file.uri)?.use{out->temp.inputStream().use{it.copyTo(out)}}?:error("A Drive-fájl nem írható");pruneDriveBackups(tree,settings.backupRetentionCount)}.isSuccess
@@ -91,6 +92,23 @@ object BackupManager {
     }
 
     private fun addFile(zip:ZipOutputStream,file:File,name:String){if(!file.exists())return;zip.putNextEntry(ZipEntry(name));file.inputStream().use{it.copyTo(zip)};zip.closeEntry()}
+    private fun pruneLocalBackups(context:Context,keep:Int){
+        if(keep<=0)return
+        val uri=MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val projection=arrayOf(MediaStore.MediaColumns._ID,MediaStore.MediaColumns.DISPLAY_NAME,MediaStore.MediaColumns.RELATIVE_PATH)
+        val backups=mutableListOf<Long>()
+        context.contentResolver.query(uri,projection,null,null,"${MediaStore.MediaColumns.DISPLAY_NAME} DESC")?.use{cursor->
+            val idColumn=cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+            val nameColumn=cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+            val pathColumn=cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
+            while(cursor.moveToNext()){
+                val name=cursor.getString(nameColumn).orEmpty()
+                val path=cursor.getString(pathColumn).orEmpty().trimEnd('/')
+                if(path==Environment.DIRECTORY_DOWNLOADS+"/RoadRecord"&&name.matches(Regex("roadrecord-backup-\\d{8}-\\d{6}\\.zip")))backups+=cursor.getLong(idColumn)
+            }
+        }
+        backups.drop(keep).forEach{id->runCatching{context.contentResolver.delete(ContentUris.withAppendedId(uri,id),null,null)}}
+    }
     private fun pruneDriveBackups(folder:DocumentFile,keep:Int){if(keep<=0)return;folder.listFiles().filter{it.isFile&&it.name?.matches(Regex("roadrecord-backup-\\d{8}-\\d{6}\\.zip"))==true}.sortedByDescending{it.name}.drop(keep).forEach{runCatching{it.delete()}}}
     private fun isWifi(context:Context):Boolean{val cm=context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager;val caps=cm.getNetworkCapabilities(cm.activeNetwork)?:return false;return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)&&caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)}
 }
