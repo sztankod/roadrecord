@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao interface RoadRecordDao {
  @Transaction @Query("SELECT * FROM work_days ORDER BY date DESC") fun observeDays():Flow<List<DayWithEvents>>
+ @Transaction @Query("SELECT * FROM work_days ORDER BY date DESC") suspend fun daysNow():List<DayWithEvents>
  @Transaction @Query("SELECT * FROM work_days WHERE id=:id") fun observeDay(id:Long):Flow<DayWithEvents?>
  @Transaction @Query("SELECT * FROM work_days WHERE date=:date LIMIT 1") suspend fun dayByDate(date:String):DayWithEvents?
  @Transaction @Query("SELECT * FROM work_days WHERE EXISTS (SELECT 1 FROM work_events e WHERE e.workDayId=work_days.id AND e.type='WORK_START') AND NOT EXISTS (SELECT 1 FROM work_events e WHERE e.workDayId=work_days.id AND e.type='WORK_END') ORDER BY createdAt DESC LIMIT 1") suspend fun openDay():DayWithEvents?
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM work_events WHERE workDayId=:dayId ORDER BY timestamp") suspend fun events(dayId:Long):List<WorkEvent>
  @Insert suspend fun insertPeriod(v:WorkPeriod):Long
  @Query("SELECT * FROM work_periods ORDER BY startDate DESC") fun observePeriods():Flow<List<WorkPeriod>>
+ @Query("SELECT * FROM work_periods ORDER BY startDate DESC") suspend fun periodsNow():List<WorkPeriod>
  @Query("SELECT * FROM work_periods WHERE endDate IS NULL LIMIT 1") suspend fun activePeriod():WorkPeriod?
  @Update suspend fun updatePeriod(v:WorkPeriod)
  @Delete suspend fun deletePeriod(v:WorkPeriod)
@@ -51,6 +53,7 @@ import kotlinx.coroutines.flow.Flow
  @Delete suspend fun deleteTourOrderGroup(v:TourOrderGroup)
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") fun observePlans(dayId:Long):Flow<List<DailyPlacePlan>>
  @Query("SELECT * FROM daily_place_plans WHERE workDayId=:dayId") suspend fun plansNow(dayId:Long):List<DailyPlacePlan>
+ @Query("SELECT * FROM daily_place_plans") suspend fun allPlansNow():List<DailyPlacePlan>
  @Query("SELECT p.* FROM daily_place_plans p INNER JOIN work_days d ON d.id=p.workDayId WHERE p.placeId=:placeId AND p.workDayId!=:dayId ORDER BY d.createdAt DESC LIMIT 1") suspend fun previousPlan(placeId:Long,dayId:Long):DailyPlacePlan?
  @Query("SELECT p.* FROM daily_place_plans p WHERE p.workDayId=(SELECT d.id FROM work_days d WHERE d.id!=:dayId AND EXISTS (SELECT 1 FROM work_events e WHERE e.workDayId=d.id AND e.type='WORK_END') ORDER BY d.createdAt DESC LIMIT 1)") suspend fun previousDayPlans(dayId:Long):List<DailyPlacePlan>
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsertPlan(v:DailyPlacePlan)
@@ -67,6 +70,7 @@ import kotlinx.coroutines.flow.Flow
  @Query("DELETE FROM place_visits WHERE workDayId=:dayId AND placeId=:placeId AND arrivalTime=:completedAt AND departureTime=:completedAt") suspend fun deleteManualVisit(dayId:Long,placeId:Long,completedAt:Long)
  @Query("SELECT * FROM place_visits WHERE placeId=:placeId") fun observeVisits(placeId:Long):Flow<List<PlaceVisit>>
  @Query("SELECT * FROM place_visits ORDER BY arrivalTime") fun observeAllVisits():Flow<List<PlaceVisit>>
+ @Query("SELECT * FROM place_visits ORDER BY arrivalTime") suspend fun allVisitsNow():List<PlaceVisit>
  @Query("SELECT * FROM app_settings WHERE id=1") fun observeSettings():Flow<AppSettings?>
  @Query("SELECT * FROM app_settings WHERE id=1") suspend fun settings():AppSettings?
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun saveSettings(v:AppSettings)

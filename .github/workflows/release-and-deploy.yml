@@ -88,9 +88,12 @@ jobs:
           FTP_SERVER: ${{ secrets.NETHELY_FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.NETHELY_FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.NETHELY_FTP_PASSWORD }}
+          ROADRECORD_SMTP_APP_PASSWORD: ${{ secrets.ROADRECORD_SMTP_APP_PASSWORD }}
+          ROADRECORD_DATA_KEY: ${{ secrets.ROADRECORD_DATA_KEY }}
         shell: bash
         run: |
           test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          test -n "$ROADRECORD_SMTP_APP_PASSWORD" && test -n "$ROADRECORD_DATA_KEY"
           curl --fail --silent --show-error --list-only \
             --user "$FTP_USERNAME:$FTP_PASSWORD" \
             "ftp://${FTP_SERVER}/apk/" | tr -d '\r' | while IFS= read -r name; do
@@ -110,6 +113,18 @@ jobs:
               --upload-file "$file" \
               "ftp://${FTP_SERVER}/${relative}"
           done
+          SMTP_PASSWORD_CLEAN="${ROADRECORD_SMTP_APP_PASSWORD// /}"
+          SMTP_B64="$(printf '%s' "$SMTP_PASSWORD_CLEAN" | base64 -w0)"
+          printf '%s\n' '<?php' 'declare(strict_types=1);' \
+            "define('RR_ADMIN_EMAIL', 'sztankod@gmail.com');" \
+            "define('RR_SMTP_USER', 'roadrecord22@gmail.com');" \
+            "define('RR_SMTP_PASSWORD', base64_decode('${SMTP_B64}'));" \
+            "define('RR_DATA_KEY', '${ROADRECORD_DATA_KEY}');" \
+            > "$RUNNER_TEMP/roadrecord-config.php"
+          curl --fail --silent --show-error --ftp-create-dirs \
+            --user "$FTP_USERNAME:$FTP_PASSWORD" \
+            --upload-file "$RUNNER_TEMP/roadrecord-config.php" \
+            "ftp://${FTP_SERVER}/api/config.php"
 
       - name: GitHub Pages csomag előkészítése
         uses: actions/upload-pages-artifact@v4

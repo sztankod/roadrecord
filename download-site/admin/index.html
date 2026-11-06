@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#0b2d5c">
+  <title>RoadRecord adminisztráció</title>
+  <link rel="icon" href="../roadrecord-logo.png" type="image/png">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="http-warning">⚠ A kapcsolat HTTP-t használ, ezért a hálózati adatforgalom nincs titkosítva.</div>
+  <main>
+    <section id="login" class="login-card">
+      <img src="../roadrecord-logo.png" alt="RoadRecord logó">
+      <h1>RoadRecord Admin</h1>
+      <p>E-mailben küldött egyszer használatos kóddal léphetsz be.</p>
+      <label>E-mail-cím<input id="email" type="email" value="sztankod@gmail.com" readonly></label>
+      <button id="request-code" class="primary">Ellenőrzőkód küldése</button>
+      <div id="code-area" hidden>
+        <label>Ellenőrzőkód<input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000"></label>
+        <button id="verify-code" class="primary">Belépés</button>
+      </div>
+      <p id="login-message" class="message"></p>
+    </section>
+
+    <section id="dashboard" hidden>
+      <header class="topbar">
+        <div class="brand"><img src="../roadrecord-logo.png" alt=""><div><strong>RoadRecord</strong><span>Adminisztráció</span></div></div>
+        <button id="logout" class="ghost">Kilépés</button>
+      </header>
+      <div class="summary-grid">
+        <article><span>Felhasználók</span><strong id="user-count">0</strong></article>
+        <article><span>Aktív készülékek</span><strong id="device-count">0</strong></article>
+        <article><span>Utolsó szinkron</span><strong id="last-sync">–</strong></article>
+      </div>
+      <div class="layout">
+        <aside>
+          <div class="aside-head"><h2>Felhasználók</h2><button id="refresh" title="Frissítés">↻</button></div>
+          <input id="search" type="search" placeholder="Keresés e-mail alapján">
+          <div id="users" class="user-list"></div>
+        </aside>
+        <section id="detail" class="detail empty"><p>Válassz egy felhasználót a részletek megnyitásához.</p></section>
+      </div>
+    </section>
+  </main>
+  <script src="admin.js"></script>
+</body>
+</html>

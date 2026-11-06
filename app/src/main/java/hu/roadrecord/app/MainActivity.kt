@@ -20,6 +20,7 @@ import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import hu.roadrecord.app.auth.AuthGate
 
 class MainActivity : ComponentActivity() {
     private lateinit var screenAwake: ScreenAwakeController
@@ -28,7 +29,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         screenAwake = ScreenAwakeController(window, contentResolver)
         val initialAppearance=ThemeStore.mode(this)
-        setContent { RoadRecordApp(initialAppearance) }
+        val roadRecordApp=application as RoadRecordApplication
+        setContent { AuthGate(roadRecordApp){RoadRecordApp(initialAppearance)} }
         if(ActivityCompat.checkSelfPermission(this,Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED){LocationServices.getFusedLocationProviderClient(this).lastLocation.addOnSuccessListener{location->location?.let{ThemeStore.saveLocation(this,it.latitude,it.longitude,it.time)}}}
         val app = application as RoadRecordApplication
         lifecycleScope.launch {
