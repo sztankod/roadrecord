@@ -53,11 +53,12 @@ jobs:
         run: |
           VERSION="$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n1)"
           VERSION_CODE="$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts | head -n1)"
+          RELEASE_DATE="$(date -u +%F)"
           test -n "$VERSION" && test -n "$VERSION_CODE"
           find download-site/apk -maxdepth 1 -type f -name '*.apk' -delete
           cp app/build/outputs/apk/release/app-release.apk download-site/apk/roadrecord-latest.apk
           cp app/build/outputs/apk/release/app-release.apk "download-site/apk/roadrecord-v${VERSION}.apk"
-          printf '{"versionCode":%s,"versionName":"%s","apkUrl":"http://roadrecord.widor.nhely.hu/apk/roadrecord-v%s.apk"}\n' "$VERSION_CODE" "$VERSION" "$VERSION" > download-site/version.json
+          printf '{"versionCode":%s,"versionName":"%s","apkUrl":"http://roadrecord.widor.nhely.hu/apk/roadrecord-v%s.apk","releaseDate":"%s"}\n' "$VERSION_CODE" "$VERSION" "$VERSION" "$RELEASE_DATE" > download-site/version.json
           sed -i -E "s/roadrecord-v[0-9.]+\.apk/roadrecord-v${VERSION}.apk/g; s/RoadRecord APK · v[0-9.]+/RoadRecord APK · v${VERSION}/g" download-site/index.html
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
