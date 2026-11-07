@@ -7,8 +7,17 @@ import androidx.exifinterface.media.ExifInterface
 import java.io.File
 
 object PhotoOptimizer {
-    const val MAX_EDGE = 1600
+    const val MAX_EDGE = 1200
     const val JPEG_QUALITY = 78
+
+    data class BatchResult(val total:Int,val optimized:Int,val failed:Int,val beforeBytes:Long,val afterBytes:Long){val savedBytes get()=(beforeBytes-afterBytes).coerceAtLeast(0)}
+
+    fun optimizeAll(files:List<File>):BatchResult{
+        val existing=files.distinctBy{it.absolutePath}.filter{it.isFile}
+        val before=existing.sumOf{it.length()};var optimized=0;var failed=0
+        existing.forEach{file->if(optimize(file))optimized++ else failed++}
+        return BatchResult(existing.size,optimized,failed,before,existing.sumOf{it.length()})
+    }
 
     fun optimize(file: File): Boolean = runCatching {
         if (!file.isFile || file.length() == 0L) return false

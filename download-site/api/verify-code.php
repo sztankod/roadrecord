@@ -24,7 +24,7 @@ $result = rr_transaction(function (array &$db) use ($email, $code, $purpose, $in
     foreach ($db['users'] as &$user) if ($user['email'] === $email) { $userId = $user['id']; $user['lastSeenAt'] = $now; break; }
     if ($userId === null) {
         $userId = rr_id('usr');
-        $db['users'][] = ['id' => $userId, 'email' => $email, 'role' => $email === strtolower(RR_ADMIN_EMAIL) ? 'admin' : 'user', 'enabled' => true, 'createdAt' => $now, 'lastSeenAt' => $now];
+        $db['users'][] = ['id' => $userId, 'email' => $email, 'role' => $email === strtolower(RR_ADMIN_EMAIL) ? 'admin' : 'user', 'enabled' => true, 'syncPolicy' => 'APP_ACTIVITY', 'createdAt' => $now, 'lastSeenAt' => $now];
     }
     $role = $email === strtolower(RR_ADMIN_EMAIL) ? 'admin' : 'user';
     $deviceId = null;
@@ -40,6 +40,7 @@ $result = rr_transaction(function (array &$db) use ($email, $code, $purpose, $in
         }
     }
     $db['sessions'][] = ['tokenHash' => hash('sha256', $token), 'userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'createdAt' => $now, 'lastSeenAt' => $now, 'expiresAt' => $now + ($purpose === 'admin' ? 43200 : 31536000)];
-    return ['userId' => $userId, 'deviceId' => $deviceId, 'role' => $role];
+    $syncPolicy = 'APP_ACTIVITY'; foreach ($db['users'] as $user) if ($user['id'] === $userId) $syncPolicy = $user['syncPolicy'] ?? 'APP_ACTIVITY';
+    return ['userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'syncPolicy' => $syncPolicy];
 });
 rr_json(['ok' => true, 'token' => $token] + $result);

@@ -13,13 +13,15 @@ import hu.roadrecord.app.MainActivity
 import hu.roadrecord.app.RoadRecordApplication
 import hu.roadrecord.app.data.GpsPoint
 import hu.roadrecord.app.theme.ThemeStore
+import hu.roadrecord.app.sync.ServerLiveStatus
 import kotlinx.coroutines.*
 
 class TrackingService:Service(){
  companion object { const val ACTION_START="hu.roadrecord.START";const val ACTION_STOP="hu.roadrecord.STOP";const val EXTRA_DAY="day";private const val CHANNEL="active_work";private const val ID=77 }
- private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO);private lateinit var client:FusedLocationProviderClient;private var dayId=0L;private val bakeryTripGate=BakeryTripGate();private var locationRequested=false;private var currentStopId:Long?=null;private var pendingStopId:Long?=null;private var pendingStopSince:Long?=null;private var pendingMisses=0;private var currentOutsideHits=0
+ private val scope=CoroutineScope(SupervisorJob()+Dispatchers.IO);private lateinit var client:FusedLocationProviderClient;private var dayId=0L;private var lastHeartbeatAt=0L;private val bakeryTripGate=BakeryTripGate();private var locationRequested=false;private var currentStopId:Long?=null;private var pendingStopId:Long?=null;private var pendingStopSince:Long?=null;private var pendingMisses=0;private var currentOutsideHits=0
  private val callback=object:LocationCallback(){override fun onLocationResult(result:LocationResult){val l=result.lastLocation?:return;scope.launch{
  val app=application as RoadRecordApplication
+  if(l.time-lastHeartbeatAt>=60_000){lastHeartbeatAt=l.time;ServerLiveStatus.send(this@TrackingService,dayId)}
   ThemeStore.saveLocation(this@TrackingService,l.latitude,l.longitude,l.time)
   val inside=app.repository.bakeryPresence(l.latitude,l.longitude,l.accuracy);if(inside!=null){val active=app.repository.activeTrip(dayId)!=null;when(bakeryTripGate.observe(inside,active)){BakeryTripAction.START->app.repository.automaticBakeryTransition(dayId,left=true,time=l.time);BakeryTripAction.CLOSE->app.repository.automaticBakeryTransition(dayId,left=false,time=l.time);BakeryTripAction.NONE->Unit}}
   val poorAccuracy=l.accuracy>30f

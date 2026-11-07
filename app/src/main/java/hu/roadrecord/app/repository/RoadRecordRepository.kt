@@ -2,6 +2,8 @@ package hu.roadrecord.app.repository
 
 import hu.roadrecord.app.data.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
@@ -14,6 +16,8 @@ import android.content.Intent
 import hu.roadrecord.app.weather.WeatherData
 import hu.roadrecord.app.backup.PhotoBackupManager
 import hu.roadrecord.app.sync.ServerSyncManager
+import hu.roadrecord.app.RoadRecordApplication
+import hu.roadrecord.app.photo.PhotoOptimizer
 import java.io.File
 
 class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Context){
@@ -58,6 +62,12 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  private fun validate(events:List<WorkEvent>){val sorted=events.sortedBy{it.timestamp};require(sorted.count{it.type==EventType.TRIP_START}<=1){"Egy munkában csak egy út rögzíthető"};var working=false;var travelling=false; sorted.forEach{when(it.type){EventType.WORK_START->{require(!working){"Már van munkakezdés"};working=true};EventType.TRIP_START->{require(working&&!travelling){"Indulás csak aktív munkában lehetséges"};travelling=true};EventType.TRIP_END->{require(travelling){"A visszaérkezés nem előzheti meg az indulást"};travelling=false};EventType.WORK_END->{require(working&&!travelling){"Munka vége csak visszaérkezés után rögzíthető"};working=false}}}}
  fun observeDay(id:Long)=dao.observeDay(id); fun plans(id:Long)=combine(dao.observePlans(id),dao.observePlaces(),dao.observeTourOrderGroups()){plans,places,groups->PlanOrdering.ordered(plans,places,groups)}; fun points(id:Long)=dao.observePoints(id)
  suspend fun saveSettings(v:AppSettings)=dao.saveSettings(v)
+ suspend fun optimizeStoredPhotos():PhotoOptimizer.BatchResult=withContext(Dispatchers.IO){
+  val files=dao.placesNow().flatMap{listOfNotNull(it.photoPath,it.entrancePhotoPath)}.map(::File)
+  val result=PhotoOptimizer.optimizeAll(files)
+  if(result.optimized>0)runCatching{PhotoBackupManager.request(context)}
+  result
+ }
  suspend fun saveWeather(v:WeatherData)=dao.updateWeather(v.tempC,v.feelsLikeC,v.conditionCode,v.conditionText,v.locationName,v.providerUpdated,v.fetchedAt)
  suspend fun savePlace(v:LocationPlace):Long{val previous=if(v.id==0L)null else dao.place(v.id);val normalized=if(v.tourOrderGroupId!=null&&previous?.tourOrderGroupId!=v.tourOrderGroupId){val next=dao.placesNow().filter{it.tourOrderGroupId==v.tourOrderGroupId}.maxOfOrNull{it.defaultTourOrder}?.plus(1)?:0;v.copy(defaultTourOrder=next)}else v;val photoChanged=previous?.photoPath!=normalized.photoPath||previous?.entrancePhotoPath!=normalized.entrancePhotoPath;val id=if(normalized.id==0L)dao.insertPlace(normalized)else{dao.updatePlace(normalized);normalized.id};if(photoChanged){cleanupUnusedPhotos(listOfNotNull(previous?.photoPath,previous?.entrancePhotoPath));runCatching{PhotoBackupManager.request(context)}};activeDay()?.let{applyDefaultTourAnchors(it.day.id)};runCatching{StopPdfManager.request(context,StopPdfManager.TRIGGER_CHANGE)};return id}
  suspend fun saveDefaultTourOrder(startIds:List<Long>,endIds:List<Long>)=planMutex.withLock{
@@ -115,6 +125,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
    val completedAt=System.currentTimeMillis()
    dao.setPlanVisited(dayId,placeId,true,"MANUAL",completedAt)
    if(dao.visitCount(dayId,placeId)==0)dao.insertVisit(PlaceVisit(workDayId=dayId,placeId=placeId,arrivalTime=completedAt,departureTime=completedAt,dwellDurationMillis=0))
+   if((context.applicationContext as RoadRecordApplication).auth.syncPolicy=="EVERY_STOP")ServerSyncManager.enqueue(context)
   }else{
    if(existing?.completionMode=="MANUAL")existing.completedAt?.let{dao.deleteManualVisit(dayId,placeId,it)}
    dao.setPlanVisited(dayId,placeId,false,null,null)
@@ -148,6 +159,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  }
  suspend fun applyStopDetection(dayId:Long,detection:StopDetection?,time:Long):LocationPlace?{
   val current=detection?.place
+  val newlyVisited=current!=null&&dao.plansNow(dayId).firstOrNull{it.placeId==current.id}?.visited==false
   if(current!=null)dao.setPlanVisited(dayId,current.id,true,"AUTO",time)
   val activeVisit=dao.activeVisit(dayId)
   if(activeVisit?.placeId!=current?.id){
@@ -155,6 +167,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
    detection?.let{dao.insertVisit(PlaceVisit(workDayId=dayId,placeId=it.place.id,arrivalTime=time,distanceMeters=it.distanceMeters))}
   }
   dao.settings()?.let{val distance=detection?.distanceMeters;if(it.currentPlaceId!=current?.id||it.currentPlaceDistanceMeters!=distance)dao.saveSettings(it.copy(currentPlaceId=current?.id,currentPlaceDistanceMeters=distance))}
+  if(newlyVisited&&(context.applicationContext as RoadRecordApplication).auth.syncPolicy=="EVERY_STOP")ServerSyncManager.enqueue(context)
   return current
  }
  suspend fun bakeryPresence(latitude:Double,longitude:Double,accuracy:Float):Boolean?{if(accuracy>30f||dao.settings()?.automaticBakeryTrips!=true)return null;val place=dao.placeByName("Vekni pékség")?:return null;val lat=place.latitude?:return null;val lon=place.longitude?:return null;val earth=6371000.0;val dLat=Math.toRadians(lat-latitude);val dLon=Math.toRadians(lon-longitude);val a=kotlin.math.sin(dLat/2).let{it*it}+kotlin.math.cos(Math.toRadians(latitude))*kotlin.math.cos(Math.toRadians(lat))*kotlin.math.sin(dLon/2).let{it*it};val distance=2*earth*kotlin.math.atan2(kotlin.math.sqrt(a),kotlin.math.sqrt(1-a));return distance<=place.recognitionRadiusMeters+accuracy.coerceAtMost(30f)}
