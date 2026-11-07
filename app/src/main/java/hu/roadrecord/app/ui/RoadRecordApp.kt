@@ -185,16 +185,18 @@ private fun openRoute(context:Context,points:List<GpsPoint>){val first=points.fi
 private sealed interface UpdateResult{data class Available(val name:String,val url:String):UpdateResult;data object Current:UpdateResult;data object Failed:UpdateResult}
 private suspend fun checkLatestVersion():UpdateResult=withContext(Dispatchers.IO){
     val sources=listOf(
+        "http://roadrecord.widor.nhely.hu/version.json",
         "https://sztankod.github.io/roadrecord/version.json",
         "https://raw.githubusercontent.com/sztankod/roadrecord/master/download-site/version.json"
     )
-    sources.firstNotNullOfOrNull{source->runCatching{
+    val versions=sources.mapNotNull{source->runCatching{
         val separator=if('?' in source)'&' else '?'
         val connection=(URL("$source${separator}check=${System.currentTimeMillis()}").openConnection() as HttpURLConnection).apply{connectTimeout=8000;readTimeout=8000;useCaches=false;setRequestProperty("Cache-Control","no-cache")}
         val json=connection.inputStream.bufferedReader().use{JSONObject(it.readText())}
-        val code=json.getInt("versionCode")
-        if(code>BuildConfig.VERSION_CODE)UpdateResult.Available(json.getString("versionName"),json.getString("apkUrl"))else UpdateResult.Current
-    }.getOrNull()}?:UpdateResult.Failed
+        Triple(json.getInt("versionCode"),json.getString("versionName"),json.getString("apkUrl"))
+    }.getOrNull()}
+    val latest=versions.maxByOrNull{it.first}?:return@withContext UpdateResult.Failed
+    if(latest.first>BuildConfig.VERSION_CODE)UpdateResult.Available(latest.second,latest.third)else UpdateResult.Current
 }
 @Composable private fun VersionChecker(request:Int){val ctx=LocalContext.current;var result by remember{mutableStateOf<UpdateResult?>(null)};LaunchedEffect(request){result=null;result=checkLatestVersion()};when(val value=result){is UpdateResult.Available->AlertDialog(onDismissRequest={result=null},title={Text("Új RoadRecord verzió")},text={Text("Elérhető az ${value.name} verzió. Szeretnéd letölteni?")},confirmButton={TextButton({ctx.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(value.url)));result=null}){Text("Letöltés")}},dismissButton={TextButton({result=null}){Text("Később")}});UpdateResult.Current->if(request>0)AlertDialog(onDismissRequest={result=null},title={Text("Nincs új verzió")},text={Text("A legfrissebb, ${BuildConfig.VERSION_NAME} verziót használod.")},confirmButton={TextButton({result=null}){Text("Rendben")}});UpdateResult.Failed->if(request>0)AlertDialog(onDismissRequest={result=null},title={Text("Nem sikerült ellenőrizni")},text={Text("Ellenőrizd az internetkapcsolatot, majd próbáld újra.")},confirmButton={TextButton({result=null}){Text("Rendben")}});null->{}}}
 @Composable private fun LiveTick():Long{var n by remember{mutableLongStateOf(System.currentTimeMillis())};LaunchedEffect(Unit){while(true){delay(1000);n=System.currentTimeMillis()}};return n}
