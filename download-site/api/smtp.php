@@ -34,7 +34,7 @@ function rr_send_code(string $recipient, string $code): void {
         rr_smtp_command($socket, 'MAIL FROM:<' . RR_SMTP_USER . '>', [250]);
         rr_smtp_command($socket, 'RCPT TO:<' . $recipient . '>', [250, 251]);
         rr_smtp_command($socket, 'DATA', [354]);
-        $subject = 'RoadRecord ellenőrzőkód';
+        $subject = "RoadRecord ellenőrzőkód: {$code}";
         $body = "RoadRecord belépési kód: {$code}\r\n\r\nA kód 10 percig érvényes. Ha nem te kérted, hagyd figyelmen kívül ezt a levelet.";
         $message = "From: RoadRecord <" . RR_SMTP_USER . ">\r\nTo: <{$recipient}>\r\nSubject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{$body}\r\n.";
         rr_smtp_command($socket, $message, [250]);
