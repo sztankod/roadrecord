@@ -18,10 +18,11 @@ import hu.roadrecord.app.sync.CentralStopsManager
 @Composable fun AuthGate(app:RoadRecordApplication,content: @Composable () -> Unit){
     val auth=app.auth;val state by auth.state.collectAsStateWithLifecycle();val scope=rememberCoroutineScope();LaunchedEffect(Unit){auth.initialize()}
     if(state.authenticated){
+        var stopChoiceCompleted by remember{mutableStateOf(false)}
         content()
-        if(!auth.centralStopsChoiceMade){
+        if(!auth.centralStopsChoiceMade&&!stopChoiceCompleted){
             var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf<String?>(null)}
-            fun loadStops(central:Boolean){busy=true;scope.launch{runCatching{CentralStopsManager.download(app,central)}.onSuccess{busy=false}.onFailure{failure->busy=false;if(failure is SessionExpiredException)auth.expireSession()else error=failure.message}}}
+            fun loadStops(central:Boolean){busy=true;scope.launch{runCatching{CentralStopsManager.download(app,central)}.onSuccess{busy=false;stopChoiceCompleted=true}.onFailure{failure->busy=false;if(failure is SessionExpiredException)auth.expireSession()else error=failure.message}}}
             AlertDialog(onDismissRequest={},title={Text("Megállók betöltése")},text={Column(verticalArrangement=Arrangement.spacedBy(9.dp)){Text("Válaszd ki, melyik megállólistát töltse le ez a telepítés.");if(state.isAdmin)Text("Adminisztrátorként később a Beállításokban frissítheted a központi tárat.",style=MaterialTheme.typography.bodySmall);error?.let{Text(it,color=MaterialTheme.colorScheme.error)};if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())}},confirmButton={Button(enabled=!busy,onClick={loadStops(true)}){Text("Központi megállók")}},dismissButton={TextButton(enabled=!busy,onClick={loadStops(false)}){Text("Saját megállólista")}})
         }
         return
