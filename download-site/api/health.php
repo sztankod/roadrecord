@@ -1,9 +1,22 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/bootstrap.php';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+if (($_GET['check'] ?? '') === 'store') {
+    try {
+        rr_load_store();
+        rr_json(['ok' => true, 'storeReadable' => true]);
+    } catch (Throwable $error) {
+        $known = [
+            'A tárhely nem hozható létre.' => 'STORAGE_DIRECTORY',
+            'Hibás szerverkulcs.' => 'KEY_FORMAT',
+            'Sérült adattár.' => 'CORRUPT_BLOB',
+            'Az adattár nem oldható fel.' => 'DECRYPT_FAILED',
+            'Az adattár foglalt.' => 'LOCK_FAILED',
+        ];
+        $code = $known[$error->getMessage()] ?? ($error instanceof TypeError ? 'TYPE_ERROR' : 'UNKNOWN_STORE_ERROR');
+        rr_json(['ok' => false, 'storeReadable' => false, 'errorCode' => $code], 500);
+    }
+}
 
-echo json_encode([
-    'ok' => true,
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+rr_json(['ok' => true]);
