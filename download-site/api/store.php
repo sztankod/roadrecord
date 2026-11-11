@@ -21,7 +21,10 @@ function rr_load_store(): array {
     $path = rr_store_path();
     if (!is_file($path)) return rr_empty_store();
     $raw = file_get_contents($path);
-    $encoded = substr((string)$raw, strpos((string)$raw, "\n") + 1);
+    if ($raw === false) throw new RuntimeException('Az adattár nem olvasható.');
+    $separator = strpos($raw, "\n");
+    if ($separator === false) throw new RuntimeException('Az adattár fejléce sérült.');
+    $encoded = substr($raw, $separator + 1);
     $blob = base64_decode(trim($encoded), true);
     if ($blob === false || strlen($blob) < 29) throw new RuntimeException('Sérült adattár.');
     $nonce = substr($blob, 0, 12);

@@ -10,6 +10,8 @@ if (($_GET['check'] ?? '') === 'store') {
         $known = [
             'A tárhely nem hozható létre.' => 'STORAGE_DIRECTORY',
             'Hibás szerverkulcs.' => 'KEY_FORMAT',
+            'Az adattár nem olvasható.' => 'READ_FAILED',
+            'Az adattár fejléce sérült.' => 'HEADER_MISSING',
             'Sérült adattár.' => 'CORRUPT_BLOB',
             'Az adattár nem oldható fel.' => 'DECRYPT_FAILED',
             'Az adattár foglalt.' => 'LOCK_FAILED',
