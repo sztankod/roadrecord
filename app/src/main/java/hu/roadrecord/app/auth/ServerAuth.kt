@@ -44,7 +44,14 @@ class ServerAuth(private val context:Context){
         return try{val response=ServerApi.get("status.php",saved);val status=runCatching{AccessStatus.valueOf(response.optString("accessStatus",if(response.optBoolean("allowed"))"ACTIVE" else "BLOCKED"))}.getOrDefault(AccessStatus.BLOCKED);val allowed=status!=AccessStatus.BLOCKED;if(allowed)prefs.edit().putLong("lastAllowedAt",System.currentTimeMillis()).putString("syncPolicy",response.optString("syncPolicy","EVERY_STOP")).apply();_state.value=ServerAuthState(loading=false,authenticated=allowed,accessStatus=status,email=response.optString("email",prefs.getString("email","").orEmpty()),displayName=response.optString("displayName"),role=response.optString("role","user"),message=when(status){AccessStatus.ACTIVE->null;AccessStatus.PENDING->"Várakozó állapot: munkát rögzíthetsz, de a Napló és az exportálás nem érhető el.";AccessStatus.BLOCKED->"A felhasználó le van tiltva."});allowed}catch(error:Exception){val grace=System.currentTimeMillis()-prefs.getLong("lastAllowedAt",0)<3*24*60*60*1000L;_state.value=ServerAuthState(loading=false,authenticated=grace,accessStatus=if(grace)AccessStatus.ACTIVE else AccessStatus.BLOCKED,email=prefs.getString("email","").orEmpty(),message=if(grace)"Offline mód – az engedély később újra ellenőrződik." else "Az engedély ellenőrzéséhez internetkapcsolat szükséges.");grace}
     }
     fun signOut(){prefs.edit().remove("token").remove("email").remove("lastAllowedAt").apply();_state.value=ServerAuthState(loading=false)}
+    fun expireSession(){
+        val email=prefs.getString("email","").orEmpty()
+        prefs.edit().remove("token").remove("lastAllowedAt").apply()
+        _state.value=ServerAuthState(loading=false,email=email,message="A munkamenet lejárt. Kérj új ellenőrzőkódot.")
+    }
 }
+
+class SessionExpiredException(message:String):IllegalStateException(message)
 
 object ServerApi{
     const val BASE="http://roadrecord.widor.nhely.hu/api/"
@@ -52,6 +59,11 @@ object ServerApi{
     suspend fun get(path:String,token:String?=null)=request(path,"GET",null,token)
     private suspend fun request(path:String,method:String,body:JSONObject?,token:String?):JSONObject=withContext(Dispatchers.IO){
         val connection=(URL(BASE+path).openConnection() as HttpURLConnection).apply{requestMethod=method;connectTimeout=20_000;readTimeout=30_000;setRequestProperty("Accept","application/json");setRequestProperty("Content-Type","application/json; charset=utf-8");token?.let{setRequestProperty("Authorization","Bearer $it")};if(body!=null){doOutput=true;outputStream.use{it.write(body.toString().toByteArray(Charsets.UTF_8))}}}
-        val text=(if(connection.responseCode in 200..299)connection.inputStream else connection.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty();val json=runCatching{JSONObject(text)}.getOrElse{throw IllegalStateException("A RoadRecord szerver hibás választ adott.")};if(connection.responseCode !in 200..299||!json.optBoolean("ok"))throw IllegalStateException(json.optString("error","A szerverkérés nem sikerült."));json
+        val status=connection.responseCode
+        val text=(if(status in 200..299)connection.inputStream else connection.errorStream)?.bufferedReader()?.use{it.readText()}.orEmpty()
+        val json=runCatching{JSONObject(text)}.getOrElse{throw IllegalStateException("A RoadRecord szerver hibás választ adott.")}
+        if(status==HttpURLConnection.HTTP_UNAUTHORIZED)throw SessionExpiredException(json.optString("error","A munkamenet lejárt."))
+        if(status !in 200..299||!json.optBoolean("ok"))throw IllegalStateException(json.optString("error","A szerverkérés nem sikerült."))
+        json
     }
 }
