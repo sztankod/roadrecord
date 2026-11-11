@@ -22,7 +22,9 @@ function rr_load_store(): array {
     if (!is_file($path)) return rr_empty_store();
     $raw = file_get_contents($path);
     if ($raw === false) throw new RuntimeException('Az adattár nem olvasható.');
-    if ($raw === '') throw new RuntimeException('Az adattár üres.');
+    // A zero-byte file can be left behind by an interrupted first write. There is
+    // no payload to recover in that case, so bootstrap a fresh encrypted store.
+    if ($raw === '') return rr_empty_store();
     $separator = strpos($raw, "\n");
     if ($separator === false) {
         if (trim($raw) === '<?php exit; ?>') throw new RuntimeException('Az adattár mentése félbeszakadt.');
@@ -47,7 +49,12 @@ function rr_save_store(array $data): void {
     $cipher = openssl_encrypt(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'aes-256-gcm', rr_key(), OPENSSL_RAW_DATA, $nonce, $tag);
     if ($cipher === false) throw new RuntimeException('Az adattár nem titkosítható.');
     $temp = $path . '.tmp';
-    file_put_contents($temp, "<?php exit; ?>\n" . base64_encode($nonce . $tag . $cipher), LOCK_EX);
+    $payload = "<?php exit; ?>\n" . base64_encode($nonce . $tag . $cipher);
+    $written = file_put_contents($temp, $payload, LOCK_EX);
+    if ($written === false || $written !== strlen($payload)) {
+        @unlink($temp);
+        throw new RuntimeException('Az adattár nem menthető.');
+    }
     chmod($temp, 0600);
     if (!rename($temp, $path)) throw new RuntimeException('Az adattár nem menthető.');
 }
