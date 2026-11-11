@@ -22,8 +22,13 @@ function rr_load_store(): array {
     if (!is_file($path)) return rr_empty_store();
     $raw = file_get_contents($path);
     if ($raw === false) throw new RuntimeException('Az adattár nem olvasható.');
+    if ($raw === '') throw new RuntimeException('Az adattár üres.');
     $separator = strpos($raw, "\n");
-    if ($separator === false) throw new RuntimeException('Az adattár fejléce sérült.');
+    if ($separator === false) {
+        if (trim($raw) === '<?php exit; ?>') throw new RuntimeException('Az adattár mentése félbeszakadt.');
+        if (is_array(json_decode($raw, true))) throw new RuntimeException('Régi adattárformátum.');
+        throw new RuntimeException('Az adattár fejléce sérült.');
+    }
     $encoded = substr($raw, $separator + 1);
     $blob = base64_decode(trim($encoded), true);
     if ($blob === false || strlen($blob) < 29) throw new RuntimeException('Sérült adattár.');
