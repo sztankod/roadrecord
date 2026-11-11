@@ -12,7 +12,7 @@ $now = time();
 rr_transaction(function (array &$db) use ($session, $snapshot, $now): void {
     $user = current(array_filter($db['users'], fn(array $u): bool => $u['id'] === $session['userId'])) ?: null;
     $device = current(array_filter($db['devices'], fn(array $d): bool => $d['id'] === ($session['deviceId'] ?? null))) ?: null;
-    if (!$user || !$device || !$user['enabled'] || !$device['enabled']) rr_json(['ok' => false, 'error' => 'Ez a példány le van tiltva.'], 403);
+    if (!$user || !$device || rr_user_status($user) === 'BLOCKED' || !$device['enabled']) rr_json(['ok' => false, 'error' => 'Ez a példány le van tiltva.'], 403);
     $db['snapshots'][$device['id']] = ['userId' => $user['id'], 'deviceId' => $device['id'], 'updatedAt' => $now, 'data' => $snapshot];
     foreach ($db['devices'] as &$item) if ($item['id'] === $device['id']) { $item['lastSeenAt'] = $now; $item['lastSyncAt'] = $now; }
 });

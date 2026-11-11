@@ -13,10 +13,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import hu.roadrecord.app.RoadRecordApplication
 import hu.roadrecord.app.ui.RoadRecordLogo
 import kotlinx.coroutines.launch
+import hu.roadrecord.app.sync.CentralStopsManager
 
 @Composable fun AuthGate(app:RoadRecordApplication,content: @Composable () -> Unit){
     val auth=app.auth;val state by auth.state.collectAsStateWithLifecycle();val scope=rememberCoroutineScope();LaunchedEffect(Unit){auth.initialize()}
-    if(state.authenticated){content();return}
+    if(state.authenticated){
+        content()
+        if(!auth.centralStopsChoiceMade){
+            var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf<String?>(null)}
+            AlertDialog(onDismissRequest={},title={Text("Megállók betöltése")},text={Column(verticalArrangement=Arrangement.spacedBy(9.dp)){Text("Válaszd ki, melyik megállólistát töltse le ez a telepítés.");if(state.isAdmin)Text("Adminisztrátorként később a Beállításokban frissítheted a központi tárat.",style=MaterialTheme.typography.bodySmall);error?.let{Text(it,color=MaterialTheme.colorScheme.error)};if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())}},confirmButton={Button(enabled=!busy,onClick={busy=true;scope.launch{runCatching{CentralStopsManager.download(app,true)}.onSuccess{busy=false}.onFailure{error=it.message;busy=false}}}){Text("Központi megállók")}},dismissButton={TextButton(enabled=!busy,onClick={busy=true;scope.launch{runCatching{CentralStopsManager.download(app,false)}.onSuccess{busy=false}.onFailure{error=it.message;busy=false}}}){Text("Saját megállólista")}})
+        }
+        return
+    }
     MaterialTheme{Surface(Modifier.fillMaxSize()){Box(Modifier.fillMaxSize().padding(24.dp),contentAlignment=Alignment.Center){Card(Modifier.widthIn(max=430.dp)){Column(Modifier.padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(13.dp)){RoadRecordLogo();Text("RoadRecord",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold);if(state.loading){CircularProgressIndicator();Text("Engedély ellenőrzése…")}else if(state.blocked){Text(state.message?:"A hozzáférés nem engedélyezett.",color=MaterialTheme.colorScheme.error);Button({scope.launch{auth.checkStatus()}}){Text("Újraellenőrzés")};TextButton({auth.signOut()}){Text("Másik e-mail-cím")}}else{AuthForm(state.email,{email->scope.launch{auth.requestCode(email).onFailure{}}},{email,code->scope.launch{auth.verify(email,code).onFailure{}}},state.message)}}}}}}
 }
 

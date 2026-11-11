@@ -7,7 +7,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') rr_json(['ok' => false], 405);
 $input = rr_input();
 $email = rr_email($input['email'] ?? '');
 $purpose = ($input['purpose'] ?? 'app') === 'admin' ? 'admin' : 'app';
-if ($purpose === 'admin' && $email !== strtolower(RR_ADMIN_EMAIL)) rr_json(['ok' => false, 'error' => 'Nincs adminisztrátori jogosultság.'], 403);
+if ($purpose === 'admin') {
+    $isAdmin=rr_transaction(function(array &$db)use($email):bool{if($email===strtolower(RR_ADMIN_EMAIL))return true;foreach($db['users'] as $user)if($user['email']===$email)return($user['role']??'user')==='admin'&&rr_user_status($user)!=='BLOCKED';return false;});
+    if(!$isAdmin)rr_json(['ok'=>false,'error'=>'Nincs adminisztrátori jogosultság.'],403);
+}
 $now = time();
 $code = (string)random_int(100000, 999999);
 

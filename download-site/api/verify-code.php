@@ -24,9 +24,9 @@ $result = rr_transaction(function (array &$db) use ($email, $code, $purpose, $in
     foreach ($db['users'] as &$user) if ($user['email'] === $email) { $userId = $user['id']; $user['lastSeenAt'] = $now; break; }
     if ($userId === null) {
         $userId = rr_id('usr');
-        $db['users'][] = ['id' => $userId, 'email' => $email, 'role' => $email === strtolower(RR_ADMIN_EMAIL) ? 'admin' : 'user', 'enabled' => true, 'syncPolicy' => 'APP_ACTIVITY', 'createdAt' => $now, 'lastSeenAt' => $now];
+        $db['users'][] = ['id' => $userId, 'email' => $email, 'displayName' => '', 'role' => $email === strtolower(RR_ADMIN_EMAIL) ? 'admin' : 'user', 'enabled' => true, 'accessStatus' => 'ACTIVE', 'syncPolicy' => 'EVERY_STOP', 'createdAt' => $now, 'lastSeenAt' => $now];
     }
-    $role = $email === strtolower(RR_ADMIN_EMAIL) ? 'admin' : 'user';
+    $role = 'user'; foreach ($db['users'] as $user) if ($user['id'] === $userId) { $role = $user['role'] ?? 'user'; break; }
     $deviceId = null;
     if ($purpose === 'app') {
         $installationId = trim((string)($input['installationId'] ?? ''));
@@ -40,7 +40,7 @@ $result = rr_transaction(function (array &$db) use ($email, $code, $purpose, $in
         }
     }
     $db['sessions'][] = ['tokenHash' => hash('sha256', $token), 'userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'createdAt' => $now, 'lastSeenAt' => $now, 'expiresAt' => $now + ($purpose === 'admin' ? 43200 : 31536000)];
-    $syncPolicy = 'APP_ACTIVITY'; foreach ($db['users'] as $user) if ($user['id'] === $userId) $syncPolicy = $user['syncPolicy'] ?? 'APP_ACTIVITY';
-    return ['userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'syncPolicy' => $syncPolicy];
+    $syncPolicy = 'EVERY_STOP'; $accessStatus='ACTIVE'; $displayName=''; foreach ($db['users'] as $user) if ($user['id'] === $userId) { $syncPolicy = $user['syncPolicy'] ?? 'EVERY_STOP'; $accessStatus=rr_user_status($user); $displayName=$user['displayName']??''; }
+    return ['userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'accessStatus'=>$accessStatus, 'displayName'=>$displayName, 'syncPolicy' => $syncPolicy];
 });
 rr_json(['ok' => true, 'token' => $token] + $result);

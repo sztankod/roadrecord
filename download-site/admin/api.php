@@ -12,7 +12,7 @@ if ($action === 'users' && $_SERVER['REQUEST_METHOD'] === 'GET') {
             foreach ($devices as $device) $lastSync = max($lastSync, (int)($device['lastSyncAt'] ?? 0));
             $online = count(array_filter($devices, fn(array $d): bool => (int)($d['lastHeartbeatAt'] ?? 0) >= time()-120));
             $openWork = count(array_filter($devices, fn(array $d): bool => (int)($d['lastHeartbeatAt'] ?? 0) >= time()-120 && (bool)($d['liveState']['workOpen'] ?? false)));
-            return ['id' => $user['id'], 'email' => $user['email'], 'enabled' => $user['enabled'], 'role' => $user['role'], 'syncPolicy' => $user['syncPolicy'] ?? 'APP_ACTIVITY', 'createdAt' => $user['createdAt'], 'lastSeenAt' => $user['lastSeenAt'], 'lastSyncAt' => $lastSync ?: null, 'deviceCount' => count($devices), 'activeDeviceCount' => count(array_filter($devices, fn(array $d): bool => $d['enabled'])), 'onlineDeviceCount'=>$online, 'openWorkCount'=>$openWork];
+            return ['id' => $user['id'], 'email' => $user['email'], 'displayName'=>$user['displayName']??'', 'accessStatus'=>rr_user_status($user), 'enabled' => rr_user_status($user)!=='BLOCKED', 'role' => $user['role']??'user', 'syncPolicy' => $user['syncPolicy'] ?? 'EVERY_STOP', 'createdAt' => $user['createdAt'], 'lastSeenAt' => $user['lastSeenAt'], 'lastSyncAt' => $lastSync ?: null, 'deviceCount' => count($devices), 'activeDeviceCount' => count(array_filter($devices, fn(array $d): bool => $d['enabled'])), 'onlineDeviceCount'=>$online, 'openWorkCount'=>$openWork];
         }, $db['users']);
     });
     usort($result, fn(array $a, array $b): int => ($b['lastSeenAt'] ?? 0) <=> ($a['lastSeenAt'] ?? 0));
@@ -28,6 +28,7 @@ if ($action === 'detail' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         $snapshots = [];
         foreach ($devices as $device) if (isset($db['snapshots'][$device['id']])) $snapshots[] = $db['snapshots'][$device['id']];
         usort($snapshots, fn(array $a, array $b): int => $b['updatedAt'] <=> $a['updatedAt']);
+        $user['displayName']=$user['displayName']??'';$user['accessStatus']=rr_user_status($user);$user['role']=$user['role']??'user';$user['syncPolicy']=$user['syncPolicy']??'EVERY_STOP';
         return ['user' => $user, 'devices' => $devices, 'snapshot' => $snapshots[0] ?? null];
     });
     rr_json(['ok' => true] + $result);
@@ -49,8 +50,20 @@ if ($action === 'toggle' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     rr_json(['ok' => true]);
 }
 
+if ($action === 'user-settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input=rr_input(); $userId=trim((string)($input['userId']??''));
+    $name=trim((string)($input['displayName']??'')); $status=(string)($input['accessStatus']??'ACTIVE');
+    $role=(string)($input['role']??'user'); $policy=(string)($input['syncPolicy']??'EVERY_STOP');
+    if(!in_array($status,['ACTIVE','PENDING','BLOCKED'],true)||!in_array($role,['user','admin'],true)||!in_array($policy,['APP_ACTIVITY','WORK_END','EVERY_STOP'],true))rr_json(['ok'=>false,'error'=>'Érvénytelen beállítás.'],422);
+    rr_transaction(function(array &$db)use($userId,$name,$status,$role,$policy,$session):void{
+        $found=false;foreach($db['users'] as &$user)if($user['id']===$userId){$user['displayName']=$name;$user['accessStatus']=$status;$user['enabled']=$status!=='BLOCKED';$user['role']=$role;$user['syncPolicy']=$policy;$found=true;break;}
+        if(!$found)rr_json(['ok'=>false,'error'=>'A felhasználó nem található.'],404);
+        $db['audit'][]=['at'=>time(),'adminUserId'=>$session['userId'],'action'=>'user-settings','targetType'=>'user','targetId'=>$userId,'value'=>['name'=>$name,'status'=>$status,'role'=>$role,'policy'=>$policy]];
+    });rr_json(['ok'=>true]);
+}
+
 if ($action === 'sync-policy' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $input=rr_input(); $userId=trim((string)($input['userId']??'')); $policy=(string)($input['policy']??'APP_ACTIVITY');
+    $input=rr_input(); $userId=trim((string)($input['userId']??'')); $policy=(string)($input['policy']??'EVERY_STOP');
     if (!in_array($policy,['APP_ACTIVITY','WORK_END','EVERY_STOP'],true)) rr_json(['ok'=>false,'error'=>'Érvénytelen szinkronizálási beállítás.'],422);
     rr_transaction(function(array &$db) use($userId,$policy,$session):void { $found=false; foreach($db['users'] as &$user) if($user['id']===$userId){$user['syncPolicy']=$policy;$found=true;break;} if(!$found)rr_json(['ok'=>false,'error'=>'A felhasználó nem található.'],404); $db['audit'][]=['at'=>time(),'adminUserId'=>$session['userId'],'action'=>'sync-policy','targetType'=>'user','targetId'=>$userId,'value'=>$policy]; });
     rr_json(['ok'=>true]);

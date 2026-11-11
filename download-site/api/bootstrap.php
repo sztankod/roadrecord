@@ -48,8 +48,19 @@ function rr_session(bool $admin = false): array {
         }
     });
     if (!$found) rr_json(['ok' => false, 'error' => 'A munkamenet lejárt.'], 401);
-    if ($admin && ($found['role'] ?? '') !== 'admin') rr_json(['ok' => false, 'error' => 'Nincs adminisztrátori jogosultság.'], 403);
+    if ($admin) {
+        $isAdmin = rr_transaction(function (array &$db) use ($found): bool {
+            foreach ($db['users'] as $user) if ($user['id'] === $found['userId']) return ($user['role'] ?? 'user') === 'admin';
+            return false;
+        });
+        if (!$isAdmin) rr_json(['ok' => false, 'error' => 'Nincs adminisztrátori jogosultság.'], 403);
+    }
     return $found;
+}
+
+function rr_user_status(array $user): string {
+    if (isset($user['accessStatus'])) return in_array($user['accessStatus'], ['ACTIVE','PENDING','BLOCKED'], true) ? $user['accessStatus'] : 'ACTIVE';
+    return ($user['enabled'] ?? true) ? 'ACTIVE' : 'BLOCKED';
 }
 
 function rr_id(string $prefix): string {
