@@ -43,7 +43,7 @@ object PhotoBackupManager {
         val app = context.applicationContext as RoadRecordApplication
         val dao = app.database.dao()
         val settings = dao.settings() ?: return@withLock false
-        val referenced = dao.placesNow().flatMap { listOfNotNull(it.photoPath, it.entrancePhotoPath) }.distinct().map(::File).filter { it.isFile }
+        val referenced = (dao.placesNow().flatMap { listOfNotNull(it.photoPath, it.entrancePhotoPath) } + listOf(settings.shellCardImagePath).filter { it.isNotBlank() }).distinct().map(::File).filter { it.isFile }
         val signature = signature(referenced)
         if (signature == settings.lastPhotoBackupSignature) return@withLock true
         val temp = File(context.cacheDir, FILE_NAME)
