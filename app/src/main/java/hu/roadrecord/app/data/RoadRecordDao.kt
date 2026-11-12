@@ -38,6 +38,10 @@ import kotlinx.coroutines.flow.Flow
  @Query("SELECT * FROM trips") suspend fun allTrips():List<Trip>
  @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp") suspend fun gpsPointsNow(tripId:Long):List<GpsPoint>
  @Query("SELECT * FROM gps_points WHERE tripId=:tripId ORDER BY timestamp") fun observePoints(tripId:Long):Flow<List<GpsPoint>>
+ @Query("SELECT * FROM fuelings WHERE workDayId=:dayId ORDER BY timestamp") fun observeFuelings(dayId:Long):Flow<List<Fueling>>
+ @Query("SELECT * FROM fuelings ORDER BY timestamp") suspend fun allFuelingsNow():List<Fueling>
+ @Insert suspend fun insertFueling(v:Fueling):Long
+ @Delete suspend fun deleteFueling(v:Fueling)
  @Query("SELECT * FROM places ORDER BY type,name") fun observePlaces():Flow<List<LocationPlace>>
  @Query("SELECT * FROM places ORDER BY type,name") suspend fun placesNow():List<LocationPlace>
  @Query("SELECT * FROM places WHERE name=:name LIMIT 1") suspend fun placeByName(name:String):LocationPlace?

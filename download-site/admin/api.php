@@ -34,6 +34,41 @@ if ($action === 'detail' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     rr_json(['ok' => true] + $result);
 }
 
+if ($action === 'central-stops' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $result = rr_transaction(fn(array &$db): array => [
+        'stops' => array_values($db['centralStops'] ?? []),
+        'updatedAt' => $db['centralStopsUpdatedAt'] ?? null,
+    ]);
+    rr_json(['ok' => true] + $result);
+}
+
+if ($action === 'central-import' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = rr_input();
+    $userId = trim((string)($input['userId'] ?? ''));
+    $placeIds = array_values(array_unique(array_map('strval', is_array($input['placeIds'] ?? null) ? $input['placeIds'] : [])));
+    if ($userId === '' || !$placeIds) rr_json(['ok'=>false,'error'=>'Jelölj ki legalább egy megállót.'],422);
+    if (count($placeIds) > 1000) rr_json(['ok'=>false,'error'=>'Túl sok kijelölt megálló.'],413);
+    $result = rr_transaction(function(array &$db) use($userId,$placeIds,$session):array {
+        $user = current(array_filter($db['users'],fn(array $item):bool=>$item['id']===$userId)) ?: null;
+        if (!$user) rr_json(['ok'=>false,'error'=>'A felhasználó nem található.'],404);
+        $devices = array_values(array_filter($db['devices'],fn(array $device):bool=>$device['userId']===$userId));
+        $snapshots=[]; foreach($devices as $device) if(isset($db['snapshots'][$device['id']])) $snapshots[]=$db['snapshots'][$device['id']];
+        usort($snapshots,fn(array $a,array $b):int=>($b['updatedAt']??0)<=>($a['updatedAt']??0));
+        $places=$snapshots[0]['data']['places']??[];
+        $selected=array_values(array_filter($places,fn(array $place):bool=>in_array((string)($place['id']??''),$placeIds,true)));
+        if (!$selected) rr_json(['ok'=>false,'error'=>'A kijelölt megállók nem találhatók a legutóbbi mentésben.'],404);
+        $central=array_values($db['centralStops']??[]);$index=[];
+        foreach($central as $position=>$place){$key=strtolower(trim((string)($place['name']??''))).'|'.strtolower(trim((string)($place['officialAddress']??'')));$index[$key]=$position;}
+        $added=0;$updated=0;
+        foreach($selected as $place){if(($place['type']??'CLIENT')==='FUEL')$place['type']='CLIENT';$key=strtolower(trim((string)($place['name']??''))).'|'.strtolower(trim((string)($place['officialAddress']??'')));if(isset($index[$key])){$central[$index[$key]]=$place;$updated++;}else{$index[$key]=count($central);$central[]=$place;$added++;}}
+        $db['centralStops']=$central;$db['centralStopsUpdatedAt']=time();
+        $db['audit'][]=['at'=>time(),'adminUserId'=>$session['userId'],'action'=>'central-stops-import','targetType'=>'user','targetId'=>$userId,'value'=>['selected'=>count($selected),'added'=>$added,'updated'=>$updated]];
+        $db['audit']=array_slice($db['audit'],-1000);
+        return ['imported'=>count($selected),'added'=>$added,'updated'=>$updated,'total'=>count($central),'updatedAt'=>$db['centralStopsUpdatedAt']];
+    });
+    rr_json(['ok'=>true]+$result);
+}
+
 if ($action === 'toggle' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = rr_input();
     $type = ($input['type'] ?? '') === 'user' ? 'user' : 'device';
