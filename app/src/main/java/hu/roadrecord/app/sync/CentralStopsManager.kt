@@ -35,7 +35,7 @@ object CentralStopsManager{
             val old=existing.firstOrNull{it.name.equals(name,true)&&it.officialAddress.equals(address,true)}
             val place=(old?:LocationPlace(name=name)).copy(
                 type=runCatching{PlaceType.valueOf(item.optString("type","CLIENT"))}.getOrDefault(PlaceType.CLIENT).let{if(it==PlaceType.FUEL)PlaceType.CLIENT else it},name=name,officialAddress=address,
-                latitude=item.optNullableDouble("latitude"),longitude=item.optNullableDouble("longitude"),encryptedGateCode=item.optNullableString("gateCode"),note=item.optString("note"),active=item.optBoolean("active",true),gpsManuallyConfirmed=item.optBoolean("gpsManuallyConfirmed",false),recognitionRadiusMeters=item.optInt("recognitionRadiusMeters",40),defaultTourAnchor=item.optString("defaultTourAnchor","NONE"),defaultTourOrder=item.optInt("defaultTourOrder",0),
+                latitude=item.optNullableDouble("latitude"),longitude=item.optNullableDouble("longitude"),encryptedGateCode=item.optNullableString("gateCode"),note=item.optString("note"),active=item.optBoolean("active",true),gpsManuallyConfirmed=item.optBoolean("gpsManuallyConfirmed",false),recognitionRadiusMeters=item.optInt("recognitionRadiusMeters",40),defaultTourAnchor=item.optString("defaultTourAnchor","NONE"),defaultTourOrder=item.optInt("defaultTourOrder",0),requiresReturnPickup=item.optBoolean("requiresReturnPickup",false),
                 photoPath=savePreview(context,item.optString("photoPreview"),old?.photoPath,"key"),entrancePhotoPath=savePreview(context,item.optString("entrancePhotoPreview"),old?.entrancePhotoPath,"entrance")
             )
             app.repository.savePlace(place);changed++

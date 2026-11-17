@@ -137,6 +137,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
  suspend fun automaticVisitDelayMillis():Long=(dao.settings()?.automaticVisitDelaySeconds?:30).coerceIn(0,300)*1000L
  suspend fun recordRecognitionDiagnostic(dayId:Long,placeId:Long,diagnostic:String)=dao.recordRecognitionDiagnostic(dayId,placeId,diagnostic)
  suspend fun previewCurrentStop(placeId:Long?,distanceMeters:Double?){dao.settings()?.let{if(it.currentPlaceId!=placeId||it.currentPlaceDistanceMeters!=distanceMeters)dao.saveSettings(it.copy(currentPlaceId=placeId,currentPlaceDistanceMeters=distanceMeters))}}
+ suspend fun saveReturnPickup(visit:PlaceVisit,received:Boolean,note:String){dao.updateVisit(visit.copy(returnPickupStatus=if(received)"YES" else "NO",returnPickupNote=note.trim()));ServerSyncManager.enqueue(context)}
  suspend fun detectPlannedStop(dayId:Long,latitude:Double,longitude:Double,accuracy:Float):StopDetection?{
   var nearest:StopDetection?=null
   dao.plansNow(dayId).forEach{plan->
