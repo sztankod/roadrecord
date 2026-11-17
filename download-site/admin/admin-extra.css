@@ -8,6 +8,7 @@
 .settings-grid input,.settings-grid select{display:block;width:100%;margin-top:5px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff}
 .user-settings small{display:block;margin-top:9px;color:var(--muted)}
 .save-user{width:auto;margin-top:12px;padding-inline:18px}
+.report-settings{display:grid;gap:12px}.report-settings label{font-size:11px;font-weight:750;color:var(--muted)}.report-settings input:not([type=checkbox]),.report-settings textarea{display:block;width:100%;margin-top:5px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:inherit}.check-line{display:flex;align-items:center;gap:8px;font-size:13px!important;color:var(--navy)!important}.check-line input{width:18px;height:18px}.report-actions{display:flex;gap:9px;flex-wrap:wrap}.report-actions button{width:auto}
 .central-stops-button{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:7px;width:calc(100% - 30px);margin:0 15px 12px;padding:11px 12px;border:1px solid #bdd8f0;background:#eef6fd;color:var(--navy);text-align:left}
 .central-stops-button>span{display:grid;place-items:center;width:27px;height:27px;border-radius:8px;background:var(--blue);color:#fff}.central-stops-button strong{font-size:12px}.central-stops-button small{color:var(--blue);font-size:10px}.central-stops-button:hover,.central-stops-button.active{border-color:var(--blue);background:#dfeffd}
 .stop-admin{border:1px solid var(--line);border-radius:11px;margin-bottom:8px;overflow:hidden}

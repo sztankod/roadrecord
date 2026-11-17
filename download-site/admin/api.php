@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once dirname(__DIR__) . '/api/bootstrap.php';
+require_once dirname(__DIR__) . '/api/delivery-reports.php';
 $session = rr_session(true);
 $action = $_GET['action'] ?? 'users';
 
@@ -40,6 +41,27 @@ if ($action === 'central-stops' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         'updatedAt' => $db['centralStopsUpdatedAt'] ?? null,
     ]);
     rr_json(['ok' => true] + $result);
+}
+
+if ($action === 'delivery-report-settings' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $config=rr_transaction(fn(array &$db):array=>rr_report_config($db));
+    rr_json(['ok'=>true,'config'=>$config]);
+}
+
+if ($action === 'delivery-report-settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input=rr_input();$recipients=[];foreach(($input['recipients']??[]) as $email){$email=strtolower(trim((string)$email));if(filter_var($email,FILTER_VALIDATE_EMAIL))$recipients[]=$email;}
+    $time=(string)($input['sendTime']??'10:00');if(!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time))rr_json(['ok'=>false,'error'=>'Hibás küldési időpont.'],422);
+    if(($input['enabled']??false)&&!$recipients)rr_json(['ok'=>false,'error'=>'Adj meg legalább egy címzettet.'],422);
+    $config=['enabled'=>(bool)($input['enabled']??false),'recipients'=>array_values(array_unique($recipients)),'sendTime'=>$time,'intro'=>trim((string)($input['intro']??'')),'outro'=>trim((string)($input['outro']??'')),'createdAt'=>(int)($input['createdAt']??time())];
+    rr_transaction(function(array &$db)use($config,$session):void{$db['deliveryReportConfig']=$config;$db['audit'][]=['at'=>time(),'adminUserId'=>$session['userId'],'action'=>'delivery-report-settings','targetType'=>'report','targetId'=>'daily','value'=>['enabled'=>$config['enabled'],'recipients'=>count($config['recipients']),'sendTime'=>$config['sendTime']]];});
+    rr_json(['ok'=>true,'config'=>$config]);
+}
+
+if ($action === 'delivery-report-test' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $result=rr_transaction(function(array &$db)use($session):array{$config=rr_report_config($db);$user=current(array_filter($db['users'],fn(array $item):bool=>($item['id']??'')===$session['userId']))?:null;if(!$user)rr_json(['ok'=>false,'error'=>'Az adminisztrátor nem található.'],404);return['config'=>$config,'email'=>$user['email']];});
+    $rows=[['stop'=>'Minta megálló','address'=>'Minta cím','supplier'=>'Minta szállító','fulfillmentDate'=>date('Y-m-d'),'status'=>'YES','note'=>'Teszt jelentés','recordedBy'=>'RoadRecord']];
+    rr_send_mail([$result['email']],'RoadRecord szállítólevél-jelentés – TESZT',rr_delivery_html($result['config'],date('Y-m-d'),$rows));
+    rr_json(['ok'=>true,'recipient'=>$result['email']]);
 }
 
 if ($action === 'central-import' && $_SERVER['REQUEST_METHOD'] === 'POST') {

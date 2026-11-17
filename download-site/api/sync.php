@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/delivery-reports.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') rr_json(['ok' => false], 405);
 $session = rr_session();
 $input = rr_input();
@@ -16,4 +17,6 @@ rr_transaction(function (array &$db) use ($session, $snapshot, $now): void {
     $db['snapshots'][$device['id']] = ['userId' => $user['id'], 'deviceId' => $device['id'], 'updatedAt' => $now, 'data' => $snapshot];
     foreach ($db['devices'] as &$item) if ($item['id'] === $device['id']) { $item['lastSeenAt'] = $now; $item['lastSyncAt'] = $now; }
 });
-rr_json(['ok' => true, 'syncedAt' => $now]);
+$reportError = null;
+try { rr_process_delivery_reports($session['userId']); } catch (Throwable $error) { $reportError = $error->getMessage(); }
+rr_json(['ok' => true, 'syncedAt' => $now, 'reportError' => $reportError]);

@@ -1,0 +1,18 @@
+name: Delivery report scheduler
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: roadrecord-delivery-report-scheduler
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Send due delivery reports
+        run: curl --fail --silent --show-error --max-time 30 http://roadrecord.widor.nhely.hu/api/delivery-report-cron.php

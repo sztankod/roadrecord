@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 function rr_empty_store(): array {
-    return ['users' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'audit' => []];
+    return ['users' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => []];
 }
 
 function rr_store_path(): string {
