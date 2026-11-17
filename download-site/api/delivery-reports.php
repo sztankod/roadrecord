@@ -63,7 +63,6 @@ function rr_delivery_rows(array $db, string $date): array {
                 $rows[] = [
                     'stop' => (string)($place['name'] ?? 'Ismeretlen megálló'),
                     'address' => (string)($place['officialAddress'] ?? ''),
-                    'supplier' => (string)($item['supplier'] ?? ''),
                     'fulfillmentDate' => (string)($item['fulfillmentDate'] ?? $date),
                     'status' => (string)($item['status'] ?? ''),
                     'note' => (string)($item['note'] ?? ''),
@@ -72,15 +71,15 @@ function rr_delivery_rows(array $db, string $date): array {
             }
         }
     }
-    usort($rows, fn(array $a, array $b): int => [$a['supplier'],$a['stop']] <=> [$b['supplier'],$b['stop']]);
+    usort($rows, fn(array $a, array $b): int => [$a['stop'],$a['fulfillmentDate']] <=> [$b['stop'],$b['fulfillmentDate']]);
     return $rows;
 }
 
 function rr_delivery_html(array $config, string $date, array $rows): string {
     $yes = count(array_filter($rows, fn(array $row): bool => $row['status'] === 'YES'));
     $no = count(array_filter($rows, fn(array $row): bool => $row['status'] === 'NO'));
-    $body = '<!doctype html><html lang="hu"><head><meta charset="utf-8"></head><body style="margin:0;background:#f3f6fa;font-family:Arial,sans-serif;color:#102b4e"><div style="max-width:900px;margin:auto;padding:24px"><div style="background:#0b2d5c;color:white;padding:20px;border-radius:14px 14px 0 0"><h1 style="margin:0">RoadRecord szállítólevél-jelentés</h1><p style="margin:7px 0 0">Kiszállítási nap: '.rr_h($date).'</p></div><div style="background:white;padding:22px;border:1px solid #d8e1eb"><p style="white-space:pre-line">'.nl2br(rr_h($config['intro'])).'</p><p><strong>Összes tétel: '.count($rows).'</strong> · Volt visszaszállító: '.$yes.' · Nem volt: '.$no.'</p><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#eef5fb"><th style="padding:9px;text-align:left">Megálló</th><th style="padding:9px;text-align:left">Szállító</th><th style="padding:9px;text-align:left">Teljesítés</th><th style="padding:9px;text-align:left">Visszaszállító</th><th style="padding:9px;text-align:left">Megjegyzés</th></tr></thead><tbody>';
-    foreach ($rows as $row) $body .= '<tr><td style="padding:9px;border-top:1px solid #e3e9ef"><strong>'.rr_h($row['stop']).'</strong><br><small>'.rr_h($row['address']).'</small></td><td style="padding:9px;border-top:1px solid #e3e9ef">'.rr_h($row['supplier']).'</td><td style="padding:9px;border-top:1px solid #e3e9ef">'.rr_h($row['fulfillmentDate']).'</td><td style="padding:9px;border-top:1px solid #e3e9ef;font-weight:bold;color:'.($row['status']==='YES'?'#18863b':'#b42318').'">'.($row['status']==='YES'?'Igen':($row['status']==='NO'?'Nem':'Nincs válasz')).'</td><td style="padding:9px;border-top:1px solid #e3e9ef">'.rr_h($row['note']).'</td></tr>';
+    $body = '<!doctype html><html lang="hu"><head><meta charset="utf-8"></head><body style="margin:0;background:#f3f6fa;font-family:Arial,sans-serif;color:#102b4e"><div style="max-width:900px;margin:auto;padding:24px"><div style="background:#0b2d5c;color:white;padding:20px;border-radius:14px 14px 0 0"><h1 style="margin:0">RoadRecord szállítólevél-jelentés</h1><p style="margin:7px 0 0">Kiszállítási nap: '.rr_h($date).'</p></div><div style="background:white;padding:22px;border:1px solid #d8e1eb"><p style="white-space:pre-line">'.nl2br(rr_h($config['intro'])).'</p><p><strong>Összes tétel: '.count($rows).'</strong> · Volt visszaszállító: '.$yes.' · Nem volt: '.$no.'</p><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#eef5fb"><th style="padding:9px;text-align:left">Megálló</th><th style="padding:9px;text-align:left">Teljesítés</th><th style="padding:9px;text-align:left">Visszaszállító</th><th style="padding:9px;text-align:left">Megjegyzés</th></tr></thead><tbody>';
+    foreach ($rows as $row) $body .= '<tr><td style="padding:9px;border-top:1px solid #e3e9ef"><strong>'.rr_h($row['stop']).'</strong><br><small>'.rr_h($row['address']).'</small></td><td style="padding:9px;border-top:1px solid #e3e9ef">'.($row['status']==='YES'?rr_h($row['fulfillmentDate']):'–').'</td><td style="padding:9px;border-top:1px solid #e3e9ef;font-weight:bold;color:'.($row['status']==='YES'?'#18863b':'#b42318').'">'.($row['status']==='YES'?'Igen':($row['status']==='NO'?'Nem':'Nincs válasz')).'</td><td style="padding:9px;border-top:1px solid #e3e9ef">'.rr_h($row['note']).'</td></tr>';
     return $body.'</tbody></table></div><p style="margin-top:22px;white-space:pre-line">'.nl2br(rr_h($config['outro'])).'</p></div></div></body></html>';
 }
 

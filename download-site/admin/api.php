@@ -59,7 +59,7 @@ if ($action === 'delivery-report-settings' && $_SERVER['REQUEST_METHOD'] === 'PO
 
 if ($action === 'delivery-report-test' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $result=rr_transaction(function(array &$db)use($session):array{$config=rr_report_config($db);$user=current(array_filter($db['users'],fn(array $item):bool=>($item['id']??'')===$session['userId']))?:null;if(!$user)rr_json(['ok'=>false,'error'=>'Az adminisztrátor nem található.'],404);return['config'=>$config,'email'=>$user['email']];});
-    $rows=[['stop'=>'Minta megálló','address'=>'Minta cím','supplier'=>'Minta szállító','fulfillmentDate'=>date('Y-m-d'),'status'=>'YES','note'=>'Teszt jelentés','recordedBy'=>'RoadRecord']];
+    $rows=[['stop'=>'Minta megálló','address'=>'Minta cím','fulfillmentDate'=>date('Y-m-d'),'status'=>'YES','note'=>'Teszt jelentés','recordedBy'=>'RoadRecord']];
     rr_send_mail([$result['email']],'RoadRecord szállítólevél-jelentés – TESZT',rr_delivery_html($result['config'],date('Y-m-d'),$rows));
     rr_json(['ok'=>true,'recipient'=>$result['email']]);
 }
