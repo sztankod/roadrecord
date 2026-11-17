@@ -174,7 +174,11 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   return current
  }
  suspend fun bakeryPresence(latitude:Double,longitude:Double,accuracy:Float):Boolean?{if(accuracy>30f||dao.settings()?.automaticBakeryTrips!=true)return null;val place=dao.placeByName("Vekni pékség")?:return null;val lat=place.latitude?:return null;val lon=place.longitude?:return null;val earth=6371000.0;val dLat=Math.toRadians(lat-latitude);val dLon=Math.toRadians(lon-longitude);val a=kotlin.math.sin(dLat/2).let{it*it}+kotlin.math.cos(Math.toRadians(latitude))*kotlin.math.cos(Math.toRadians(lat))*kotlin.math.sin(dLon/2).let{it*it};val distance=2*earth*kotlin.math.atan2(kotlin.math.sqrt(a),kotlin.math.sqrt(1-a));return distance<=place.recognitionRadiusMeters+accuracy.coerceAtMost(30f)}
- suspend fun automaticBakeryTransition(dayId:Long,left:Boolean,time:Long){val last=dao.events(dayId).lastOrNull()?.type?:return;if(left&&(last==EventType.WORK_START||last==EventType.TRIP_END))addEvent(dayId,EventType.TRIP_START,time)else if(!left&&last==EventType.TRIP_START)addEvent(dayId,EventType.TRIP_END,time)}
+ suspend fun automaticBakeryTransition(dayId:Long,left:Boolean,time:Long){
+  val last=dao.events(dayId).lastOrNull()?.type?:return
+  if(left&&(last==EventType.WORK_START||last==EventType.TRIP_END))addEvent(dayId,EventType.TRIP_START,time)
+  else if(!left&&last==EventType.TRIP_START&&dao.plansNow(dayId).count{it.visited}>=2)addEvent(dayId,EventType.TRIP_END,time)
+ }
  fun routeConfig(dayId:Long)=dao.observeRouteConfig(dayId)
  suspend fun saveRouteConfig(v:RoutePlanConfig)=dao.saveRouteConfig(v)
  suspend fun setImportant(p:DailyPlacePlan)=dao.upsertPlan(p.copy(priority=if(p.priority==Priority.NORMAL)Priority.IMPORTANT else Priority.NORMAL))
