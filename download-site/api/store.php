@@ -2,7 +2,29 @@
 declare(strict_types=1);
 
 function rr_empty_store(): array {
-    return ['users' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => []];
+    return ['users' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryNoteOverrides' => [], 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => []];
+}
+
+function rr_backfill_delivery_note_recorded_at(array &$data): void {
+    $fallback = 1794960000000; // 2026-11-18 01:00 Europe/Budapest
+    foreach ($data['snapshots'] as &$snapshot) {
+        foreach (($snapshot['data']['visits'] ?? []) as &$visit) {
+            if (!isset($visit['returnPickupItems']) || !is_array($visit['returnPickupItems'])) continue;
+            foreach ($visit['returnPickupItems'] as &$item) if (empty($item['recordedAt'])) $item['recordedAt'] = $fallback;
+            unset($item);
+        }
+        unset($visit);
+    }
+    unset($snapshot);
+    foreach ($data['deliveryNoteOverrides'] as &$userOverrides) {
+        foreach ($userOverrides as &$items) {
+            if (!is_array($items)) continue;
+            foreach ($items as &$item) if (empty($item['recordedAt'])) $item['recordedAt'] = $fallback;
+            unset($item);
+        }
+        unset($items);
+    }
+    unset($userOverrides);
 }
 
 function rr_store_path(): string {
@@ -65,6 +87,7 @@ function rr_transaction(callable $operation): mixed {
     if (!$lock || !flock($lock, LOCK_EX)) throw new RuntimeException('Az adattár foglalt.');
     try {
         $data = rr_load_store();
+        rr_backfill_delivery_note_recorded_at($data);
         $result = $operation($data);
         rr_save_store($data);
         return $result;
