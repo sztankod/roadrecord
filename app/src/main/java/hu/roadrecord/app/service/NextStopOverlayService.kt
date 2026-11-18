@@ -288,6 +288,12 @@ class NextStopOverlayService : Service() {
         deliveryNoteView = ImageView(this).apply {
             setImageResource(R.drawable.delivery_note_truck)
             scaleType = ImageView.ScaleType.CENTER_CROP
+            background = GradientDrawable().apply {
+                setColor(0xFFE53935.toInt())
+                shape = GradientDrawable.OVAL
+                setStroke((2 * density).roundToInt(), 0xFFFFCDD2.toInt())
+            }
+            setPadding((6 * density).roundToInt(), (6 * density).roundToInt(), (6 * density).roundToInt(), (6 * density).roundToInt())
             contentDescription = "Szállítólevél szükséges"
             visibility = View.GONE
         }
