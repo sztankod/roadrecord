@@ -41,7 +41,11 @@ class TrackingService:Service(){
    }
    currentStopId?.let{id->if(app.repository.isClearlyOutsideStop(id,l.latitude,l.longitude,l.accuracy)){currentOutsideHits++;if(currentOutsideHits>=2){app.repository.applyStopDetection(dayId,null,l.time);app.repository.previewCurrentStop(null,null);currentStopId=null;currentOutsideHits=0}}else currentOutsideHits=0}
   }
-  if(NextStopOverlayService.visible){val next=app.repository.nextPlannedStop(dayId,detectedId);startService(Intent(this@TrackingService,NextStopOverlayService::class.java).setAction(NextStopOverlayService.ACTION_UPDATE).putExtra(NextStopOverlayService.EXTRA_CURRENT_NAME,detection?.place?.name?:"Úton").putExtra(NextStopOverlayService.EXTRA_CURRENT_ADDRESS,detection?.place?.officialAddress.orEmpty()).putExtra(NextStopOverlayService.EXTRA_NAME,next?.name?:"Nincs további megálló").putExtra(NextStopOverlayService.EXTRA_ADDRESS,next?.officialAddress.orEmpty()).apply{next?.latitude?.let{putExtra(NextStopOverlayService.EXTRA_LATITUDE,it)};next?.longitude?.let{putExtra(NextStopOverlayService.EXTRA_LONGITUDE,it)}})}
+  if(NextStopOverlayService.visible){
+   val current=app.repository.currentDetectedStop();if(currentStopId==null)currentStopId=current?.id
+   val next=app.repository.nextPlannedStop(dayId,current?.id)
+   startService(Intent(this@TrackingService,NextStopOverlayService::class.java).setAction(NextStopOverlayService.ACTION_UPDATE).putExtra(NextStopOverlayService.EXTRA_CURRENT_NAME,current?.name?:"Úton").putExtra(NextStopOverlayService.EXTRA_CURRENT_ADDRESS,current?.officialAddress.orEmpty()).putExtra(NextStopOverlayService.EXTRA_CURRENT_REQUIRES_RETURN,current?.requiresReturnPickup==true).putExtra(NextStopOverlayService.EXTRA_NAME,next?.name?:"Nincs további megálló").putExtra(NextStopOverlayService.EXTRA_ADDRESS,next?.officialAddress.orEmpty()).apply{next?.latitude?.let{putExtra(NextStopOverlayService.EXTRA_LATITUDE,it)};next?.longitude?.let{putExtra(NextStopOverlayService.EXTRA_LONGITUDE,it)}})
+  }
   val trip=app.repository.activeTrip(dayId)?:return@launch;app.repository.addGpsPoint(GpsPoint(tripId=trip.id,timestamp=l.time,latitude=l.latitude,longitude=l.longitude,accuracy=l.accuracy))
  }}}
  override fun onCreate(){super.onCreate();client=LocationServices.getFusedLocationProviderClient(this);val manager=getSystemService(NOTIFICATION_SERVICE) as NotificationManager;manager.createNotificationChannel(NotificationChannel(CHANNEL,"Aktív munkaidő",NotificationManager.IMPORTANCE_LOW))}

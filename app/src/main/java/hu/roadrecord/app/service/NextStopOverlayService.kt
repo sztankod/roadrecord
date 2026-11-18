@@ -1,5 +1,7 @@
 package hu.roadrecord.app.service
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.app.Service
 import android.content.Intent
 import android.content.res.Configuration
@@ -18,10 +20,12 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import hu.roadrecord.app.MainActivity
+import hu.roadrecord.app.R
 import hu.roadrecord.app.RoadRecordApplication
 import hu.roadrecord.app.ui.widget.DrivingAnimationView
 import hu.roadrecord.app.ui.widget.isTripActive
@@ -48,6 +52,7 @@ class NextStopOverlayService : Service() {
         const val EXTRA_LONGITUDE = "longitude"
         const val EXTRA_CURRENT_NAME = "current_name"
         const val EXTRA_CURRENT_ADDRESS = "current_address"
+        const val EXTRA_CURRENT_REQUIRES_RETURN = "current_requires_return"
         const val EXTRA_PIN_NEXT = "pin_next"
 
         @Volatile
@@ -80,10 +85,13 @@ class NextStopOverlayService : Service() {
     private var drivingView: DrivingAnimationView? = null
     private var currentTitleView: TextView? = null
     private var nextColumnView: View? = null
+    private var deliveryNoteView: ImageView? = null
+    private var deliveryNoteAnimator: ObjectAnimator? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var tripActive = false
     private var currentName = "Úton"
     private var currentAddress = ""
+    private var currentRequiresReturn = false
     private var nextName = "Nincs további megálló"
     private var nextAddress = ""
     private var nextLatitude: Double? = null
@@ -151,6 +159,7 @@ class NextStopOverlayService : Service() {
         }
         incomingCurrent?.let { currentName = it.ifBlank { "Úton" } }
         intent.getStringExtra(EXTRA_CURRENT_ADDRESS)?.let { currentAddress = it }
+        if (intent.hasExtra(EXTRA_CURRENT_REQUIRES_RETURN)) currentRequiresReturn = intent.getBooleanExtra(EXTRA_CURRENT_REQUIRES_RETURN, false)
         if (intent.getBooleanExtra(EXTRA_PIN_NEXT, false)) {
             pinnedNextName = intent.getStringExtra(EXTRA_NAME).orEmpty()
             pinnedNextAddress = intent.getStringExtra(EXTRA_ADDRESS).orEmpty()
@@ -173,6 +182,7 @@ class NextStopOverlayService : Service() {
         prefs.edit()
             .putString("current_name", currentName)
             .putString("current_address", currentAddress)
+            .putBoolean("current_requires_return", currentRequiresReturn)
             .putString("next_name", nextName)
             .putString("next_address", nextAddress)
             .putString("next_latitude", nextLatitude?.toString())
@@ -190,6 +200,7 @@ class NextStopOverlayService : Service() {
     private fun restoreContent() {
         currentName = prefs.getString("current_name", currentName) ?: currentName
         currentAddress = prefs.getString("current_address", currentAddress) ?: currentAddress
+        currentRequiresReturn = prefs.getBoolean("current_requires_return", currentRequiresReturn)
         nextName = prefs.getString("next_name", nextName) ?: nextName
         nextAddress = prefs.getString("next_address", nextAddress) ?: nextAddress
         nextLatitude = prefs.getString("next_latitude", null)?.toDoubleOrNull()
@@ -213,6 +224,13 @@ class NextStopOverlayService : Service() {
         nextColumnView?.contentDescription = "Navigáció a következő megállóhoz: $nextName"
         drivingView?.visibility = if (isOnRoad) View.VISIBLE else View.GONE
         drivingView?.motionEnabled = isOnRoad
+        deliveryNoteView?.visibility = if (currentRequiresReturn && !isOnRoad) View.VISIBLE else View.GONE
+        if (currentRequiresReturn && !isOnRoad) {
+            if (deliveryNoteAnimator?.isStarted != true) deliveryNoteAnimator?.start()
+        } else {
+            deliveryNoteAnimator?.cancel()
+            deliveryNoteView?.alpha = 1f
+        }
     }
 
     private fun ensureShown() {
@@ -267,6 +285,17 @@ class NextStopOverlayService : Service() {
             setPadding((5 * density).toInt(), (5 * density).toInt(), (5 * density).toInt(), (5 * density).toInt())
             setOnClickListener { openRoadRecord() }
         }
+        deliveryNoteView = ImageView(this).apply {
+            setImageResource(R.drawable.delivery_note_truck)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = "Szállítólevél szükséges"
+            visibility = View.GONE
+        }
+        deliveryNoteAnimator = ObjectAnimator.ofFloat(deliveryNoteView, View.ALPHA, .25f, 1f).apply {
+            duration = 550
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+        }
         val close = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
             setColorFilter(Color.WHITE)
@@ -291,6 +320,7 @@ class NextStopOverlayService : Service() {
                 setStroke((1 * density).roundToInt(), 0x44FFFFFF)
             }
             addView(back, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginEnd = (5 * density).toInt() })
+            addView(deliveryNoteView, LinearLayout.LayoutParams((42 * density).toInt(), (42 * density).toInt()).apply { marginEnd = (5 * density).toInt() })
             addView(current, LinearLayout.LayoutParams(0, -2, 1f).apply { current.minimumHeight = (58 * density).roundToInt() })
             addView(View(this@NextStopOverlayService).apply { setBackgroundColor(0x55FFFFFF) }, LinearLayout.LayoutParams((1 * density).toInt(), (42 * density).toInt()).apply { setMargins((8 * density).toInt(), 0, (8 * density).toInt(), 0) })
             addView(next, LinearLayout.LayoutParams(0, (58 * density).toInt(), 1f))
@@ -321,6 +351,7 @@ class NextStopOverlayService : Service() {
         windowManager.addView(container, params)
         root = container
         visible = true
+        renderContent()
         container.post { correctPosition() }
     }
 
@@ -425,12 +456,15 @@ class NextStopOverlayService : Service() {
 
     private fun hide() {
         drivingView?.motionEnabled = false
+        deliveryNoteAnimator?.cancel()
         root?.let { runCatching { windowManager.removeView(it) } }
         root = null
         params = null
         drivingView = null
         currentTitleView = null
         nextColumnView = null
+        deliveryNoteView = null
+        deliveryNoteAnimator = null
         visible = false
     }
 

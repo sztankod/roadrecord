@@ -134,6 +134,7 @@ class RoadRecordRepository(private val dao:RoadRecordDao,private val context:Con
   }
  }
  suspend fun nextPlannedStop(dayId:Long,excludePlaceId:Long?=null):LocationPlace?{val places=dao.placesNow();val byId=places.associateBy{it.id};return PlanOrdering.ordered(dao.plansNow(dayId),places,dao.tourOrderGroupsNow()).filter{!it.visited&&it.placeId!=excludePlaceId}.firstNotNullOfOrNull{byId[it.placeId]?.takeIf{place->place.active}}}
+ suspend fun currentDetectedStop():LocationPlace?=dao.settings()?.currentPlaceId?.let{dao.place(it)}
  suspend fun automaticVisitDelayMillis():Long=(dao.settings()?.automaticVisitDelaySeconds?:30).coerceIn(0,300)*1000L
  suspend fun recordRecognitionDiagnostic(dayId:Long,placeId:Long,diagnostic:String)=dao.recordRecognitionDiagnostic(dayId,placeId,diagnostic)
  suspend fun previewCurrentStop(placeId:Long?,distanceMeters:Double?){dao.settings()?.let{if(it.currentPlaceId!=placeId||it.currentPlaceDistanceMeters!=distanceMeters)dao.saveSettings(it.copy(currentPlaceId=placeId,currentPlaceDistanceMeters=distanceMeters))}}
