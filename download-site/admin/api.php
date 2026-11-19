@@ -88,16 +88,24 @@ if ($action === 'delivery-report-settings' && $_SERVER['REQUEST_METHOD'] === 'PO
     $input=rr_input();$recipients=[];foreach(($input['recipients']??[]) as $email){$email=strtolower(trim((string)$email));if(filter_var($email,FILTER_VALIDATE_EMAIL))$recipients[]=$email;}
     $time=(string)($input['sendTime']??'10:00');if(!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time))rr_json(['ok'=>false,'error'=>'Hibás küldési időpont.'],422);
     if(($input['enabled']??false)&&!$recipients)rr_json(['ok'=>false,'error'=>'Adj meg legalább egy címzettet.'],422);
-    $config=['enabled'=>(bool)($input['enabled']??false),'recipients'=>array_values(array_unique($recipients)),'sendTime'=>$time,'intro'=>trim((string)($input['intro']??'')),'outro'=>trim((string)($input['outro']??'')),'createdAt'=>(int)($input['createdAt']??time())];
+    $subject=trim((string)($input['subject']??''));if($subject==='')rr_json(['ok'=>false,'error'=>'Az e-mail tárgya nem lehet üres.'],422);
+    $heading=trim((string)($input['heading']??''));if($heading==='')rr_json(['ok'=>false,'error'=>'Az e-mail fejlécének szövege nem lehet üres.'],422);
+    $testRecipient=strtolower(trim((string)($input['testRecipient']??'')));if($testRecipient!==''&&!filter_var($testRecipient,FILTER_VALIDATE_EMAIL))rr_json(['ok'=>false,'error'=>'Hibás tesztcímzett.'],422);
+    $config=['enabled'=>(bool)($input['enabled']??false),'recipients'=>array_values(array_unique($recipients)),'sendTime'=>$time,'subject'=>$subject,'heading'=>$heading,'testRecipient'=>$testRecipient,'intro'=>trim((string)($input['intro']??'')),'outro'=>trim((string)($input['outro']??'')),'createdAt'=>(int)($input['createdAt']??time())];
     rr_transaction(function(array &$db)use($config,$session):void{$db['deliveryReportConfig']=$config;$db['audit'][]=['at'=>time(),'adminUserId'=>$session['userId'],'action'=>'delivery-report-settings','targetType'=>'report','targetId'=>'daily','value'=>['enabled'=>$config['enabled'],'recipients'=>count($config['recipients']),'sendTime'=>$config['sendTime']]];});
     rr_json(['ok'=>true,'config'=>$config]);
 }
 
 if ($action === 'delivery-report-test' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $result=rr_transaction(function(array &$db)use($session):array{$config=rr_report_config($db);$user=current(array_filter($db['users'],fn(array $item):bool=>($item['id']??'')===$session['userId']))?:null;if(!$user)rr_json(['ok'=>false,'error'=>'Az adminisztrátor nem található.'],404);return['config'=>$config,'email'=>$user['email']];});
-    $rows=[['stop'=>'Minta megálló','address'=>'Minta cím','fulfillmentDate'=>date('Y-m-d'),'note'=>'Teszt jelentés','recordedBy'=>'RoadRecord']];
-    rr_send_mail([$result['email']],'RoadRecord szállítólevél riport – TESZT',rr_delivery_html($result['config'],date('Y-m-d'),$rows));
-    rr_json(['ok'=>true,'recipient'=>$result['email']]);
+    $input=rr_input();$mode=(string)($input['mode']??'sample');$date=(string)($input['date']??date('Y-m-d'));
+    if(!in_array($mode,['sample','live'],true))rr_json(['ok'=>false,'error'=>'Hibás tesztadattípus.'],422);
+    if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$date))rr_json(['ok'=>false,'error'=>'Hibás riportdátum.'],422);
+    $result=rr_transaction(function(array &$db)use($session,$mode,$date):array{$config=rr_report_config($db);$user=current(array_filter($db['users'],fn(array $item):bool=>($item['id']??'')===$session['userId']))?:null;if(!$user)rr_json(['ok'=>false,'error'=>'Az adminisztrátor nem található.'],404);return['config'=>$config,'email'=>$user['email'],'rows'=>$mode==='live'?rr_delivery_rows($db,$date):[]];});
+    $recipient=strtolower(trim((string)($input['recipient']??'')))?:((string)($result['config']['testRecipient']??'')?:$result['email']);if(!filter_var($recipient,FILTER_VALIDATE_EMAIL))rr_json(['ok'=>false,'error'=>'Hibás tesztcímzett.'],422);
+    $rows=$mode==='live'?$result['rows']:[['stop'=>'Minta megálló','address'=>'Minta cím','fulfillmentDate'=>$date,'note'=>'Teszt riport','recordedBy'=>'RoadRecord']];
+    if($mode==='live'&&!$rows)rr_json(['ok'=>false,'error'=>'A kiválasztott naphoz nincs kiküldhető éles adat.'],404);
+    rr_send_mail([$recipient],rr_report_subject($result['config'],$date,true),rr_delivery_html($result['config'],$date,$rows));
+    rr_json(['ok'=>true,'recipient'=>$recipient,'mode'=>$mode,'date'=>$date,'items'=>count($rows)]);
 }
 
 if ($action === 'central-import' && $_SERVER['REQUEST_METHOD'] === 'POST') {
