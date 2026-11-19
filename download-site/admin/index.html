@@ -8,10 +8,10 @@
   <meta name="theme-color" content="#0b2d5c">
   <title>RoadRecord adminisztráció</title>
   <link rel="icon" href="../roadrecord-logo.png" type="image/png">
-  <link rel="stylesheet" href="admin.css?v=20261119-2">
-  <link rel="stylesheet" href="admin-extra.css?v=20261119-2">
-  <link rel="stylesheet" href="live.css?v=20261119-2">
-  <link rel="stylesheet" href="admin-modern.css?v=20261119-2">
+  <link rel="stylesheet" href="admin.css?v=20261119-3">
+  <link rel="stylesheet" href="admin-extra.css?v=20261119-3">
+  <link rel="stylesheet" href="live.css?v=20261119-3">
+  <link rel="stylesheet" href="admin-modern.css?v=20261119-3">
 </head>
 <body>
   <main>
@@ -38,23 +38,23 @@
 
     <section id="dashboard" hidden>
       <header class="topbar">
-        <div class="brand"><img src="../roadrecord-logo.png" alt=""><div><strong>RoadRecord</strong><span>Adminisztráció</span></div></div>
-        <div class="top-actions"><span class="notification" aria-hidden="true">♧</span><button id="logout" class="ghost">⇥&nbsp; Kilépés</button></div>
+        <div class="brand"><img src="roadrecord-mark-white.png" alt="RoadRecord"><div><strong>RoadRecord</strong><span>Adminisztráció</span></div></div>
+        <div class="top-actions"><span class="notification" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><i></i></span><button id="logout" class="ghost"><svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg> Kilépés</button></div>
       </header>
       <div class="summary-grid">
-        <article><span>Felhasználók</span><strong id="user-count">0</strong></article>
-        <article><span>Aktív készülékek</span><strong id="device-count">0</strong></article>
-        <article><span>Utolsó szinkron</span><strong id="last-sync">–</strong></article>
+        <article><i><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></i><span>Felhasználók</span><strong id="user-count">0</strong></article>
+        <article><i><svg viewBox="0 0 24 24"><path d="M12 2 3 7l9 5 9-5-9-5zM3 12l9 5 9-5M3 17l9 5 9-5"/></svg></i><span>Aktív készülékek</span><strong id="device-count">0</strong></article>
+        <article><i><svg viewBox="0 0 24 24"><path d="M6 2v3M18 2v3M3 9h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2z"/></svg></i><span>Utolsó szinkron</span><strong id="last-sync">–</strong></article>
       </div>
       <div class="layout">
         <aside>
           <nav class="admin-nav">
-          <button id="central-stops" class="central-stops-button"><span>⌂</span><strong>Központi megállótár</strong><small id="central-stop-count">Megnyitás</small></button>
-          <button id="delivery-reports" class="central-stops-button"><span><img src="delivery-note-icon.svg" alt=""></span><strong>Szállítólevél riport</strong><small>Beállítások</small></button>
-          <button id="delivery-notes" class="central-stops-button"><span><img src="delivery-note-icon.svg" alt=""></span><strong>Szállítólevelek begyűjtése</strong><small>Napi összesítő</small></button>
-          <button id="delivery-summary" class="central-stops-button"><span><img src="delivery-note-icon.svg" alt=""></span><strong>Szállítólevél leltár</strong><small>Teljesítési dátumok</small></button>
+          <button id="central-stops" class="central-stops-button"><span><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg></span><strong>Központi megállótár</strong><small id="central-stop-count">Megnyitás</small></button>
+          <button id="delivery-reports" class="central-stops-button"><span><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM15 2v6h5M9 12h8M9 16h8"/></svg></span><strong>Szállítólevél riport</strong><small>Beállítások</small></button>
+          <button id="delivery-notes" class="central-stops-button"><span><svg viewBox="0 0 24 24"><path d="M2 7h13v10H2zM15 11h4l3 3v3h-7zM6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4M18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/></svg></span><strong>Szállítólevelek begyűjtése</strong><small>Napi összesítő</small></button>
+          <button id="delivery-summary" class="central-stops-button"><span><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM15 2v6h5M9 12h8M9 16h8"/></svg></span><strong>Szállítólevél leltár</strong><small>Teljesítési dátumok</small></button>
           <div class="aside-section-label">Felhasználók</div>
-          <button id="admin-accounts" class="central-stops-button"><span>♙</span><strong>Userek</strong><small>Admin és guest</small></button>
+          <button id="admin-accounts" class="central-stops-button"><span><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><strong>Felhasználók</strong><small>Admin és guest</small></button>
           </nav>
           <div class="aside-head"><h2>Alkalmazás-felhasználók</h2><button id="refresh" title="Frissítés">↻</button></div>
           <input id="search" type="search" placeholder="Keresés e-mail alapján">
@@ -64,6 +64,6 @@
       </div>
     </section>
   </main>
-  <script src="admin.js?v=20261119-2"></script>
+  <script src="admin.js?v=20261119-3"></script>
 </body>
 </html>
