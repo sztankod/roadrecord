@@ -22,7 +22,7 @@ $('login-method-code').onclick=()=>{$('login-method-code').classList.add('active
 $('login-method-password').onclick=()=>{$('login-method-password').classList.add('active');$('login-method-code').classList.remove('active');$('password-login').hidden=false;$('code-login').hidden=true;$('login-message').textContent='';};
 
 $('request-code').onclick=async()=>{
-  $('request-code').disabled=true;$('login-message').textContent='Kód küldése…';
+  $('code-area').hidden=false;$('request-code').disabled=true;$('login-message').textContent='Kód küldése…';
   try{await api(API+'request-code.php',{method:'POST',body:JSON.stringify({email:$('email').value,purpose:'admin'})});$('code-area').hidden=false;$('login-message').textContent='A kódot elküldtük.';$('code').focus();}
   catch(error){$('login-message').textContent=error.message;}
   finally{$('request-code').disabled=false;}

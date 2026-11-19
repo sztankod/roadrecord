@@ -8,10 +8,10 @@
   <meta name="theme-color" content="#0b2d5c">
   <title>RoadRecord adminisztráció</title>
   <link rel="icon" href="../roadrecord-logo.png" type="image/png">
-  <link rel="stylesheet" href="admin.css">
-  <link rel="stylesheet" href="admin-extra.css">
-  <link rel="stylesheet" href="live.css">
-  <link rel="stylesheet" href="admin-modern.css">
+  <link rel="stylesheet" href="admin.css?v=20261119-2">
+  <link rel="stylesheet" href="admin-extra.css?v=20261119-2">
+  <link rel="stylesheet" href="live.css?v=20261119-2">
+  <link rel="stylesheet" href="admin-modern.css?v=20261119-2">
 </head>
 <body>
   <main>
@@ -19,10 +19,10 @@
       <img src="../roadrecord-logo.png" alt="RoadRecord logó">
       <h1>RoadRecord Admin</h1>
       <p>Válaszd ki a belépés módját.</p>
-      <div class="login-methods"><button id="login-method-code" class="active">Ellenőrzőkód</button><button id="login-method-password">Jelszó</button></div>
+      <div class="login-methods"><button id="login-method-code" type="button" class="active">Ellenőrzőkód</button><button id="login-method-password" type="button">Jelszó</button></div>
       <div id="code-login">
         <label>E-mail-cím<input id="email" type="email" value="sztankod@gmail.com"></label>
-        <button id="request-code" class="primary">Ellenőrzőkód küldése</button>
+        <button id="request-code" type="button" class="primary">Ellenőrzőkód küldése</button>
         <div id="code-area" hidden>
           <label>Ellenőrzőkód<input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000"></label>
           <button id="verify-code" class="primary">Belépés</button>
@@ -64,6 +64,6 @@
       </div>
     </section>
   </main>
-  <script src="admin.js"></script>
+  <script src="admin.js?v=20261119-2"></script>
 </body>
 </html>
