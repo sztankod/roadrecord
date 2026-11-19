@@ -286,8 +286,8 @@ class NextStopOverlayService : Service() {
             setOnClickListener { openRoadRecord() }
         }
         deliveryNoteView = ImageView(this).apply {
-            setImageResource(R.drawable.delivery_note_truck)
-            scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageResource(R.drawable.delivery_note_icon)
+            scaleType = ImageView.ScaleType.FIT_CENTER
             background = GradientDrawable().apply {
                 setColor(0xFFE53935.toInt())
                 shape = GradientDrawable.OVAL
