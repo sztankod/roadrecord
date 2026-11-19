@@ -68,9 +68,9 @@ function rr_delivery_rows(array $db, string $date): array {
             $placeId=(string)($visit['placeId']??'');
             foreach (($visit['returnPickupItems'] ?? []) as $item) {
                 $recordedAt=(int)($item['recordedAt']??0);
-                if($recordedAt<=0)continue;
-                $recordedDate=(new DateTimeImmutable('@'.intdiv($recordedAt,1000)))->setTimezone(new DateTimeZone('Europe/Budapest'))->format('Y-m-d');
-                if($recordedDate!==$date)continue;
+                $collectionDate=(string)($item['collectionDate']??'');
+                if($collectionDate===''&&$recordedAt>0)$collectionDate=(new DateTimeImmutable('@'.intdiv($recordedAt,1000)))->setTimezone(new DateTimeZone('Europe/Budapest'))->format('Y-m-d');
+                if($collectionDate!==$date)continue;
                 $notesByPlace[$placeId][]=['fulfillmentDate'=>(string)($item['fulfillmentDate']??''),'note'=>(string)($item['note']??''),'recordedBy'=>$courier];
             }
         }

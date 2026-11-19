@@ -2,7 +2,20 @@
 declare(strict_types=1);
 
 function rr_empty_store(): array {
-    return ['users' => [], 'adminAccounts' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryNoteOverrides' => [], 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => [], 'deliveryNoteRecordedAtBackfilled' => false];
+    return ['users' => [], 'adminAccounts' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryNoteOverrides' => [], 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => [], 'deliveryNoteRecordedAtBackfilled' => false, 'deliveryNoteCollectionDateBackfilled' => false];
+}
+
+function rr_backfill_delivery_note_collection_date(array &$data): void {
+    if (($data['deliveryNoteCollectionDateBackfilled'] ?? false) === true) return;
+    $tz = new DateTimeZone('Europe/Budapest');
+    $visitDatesByUser = [];
+    foreach ($data['snapshots'] as &$snapshot) {
+        $userId=(string)($snapshot['userId']??'');$dayDates=[];
+        foreach(($snapshot['data']['days']??[])as$day){$date=(string)($day['date']??'');$end=0;foreach(($day['events']??[])as$event)if(($event['type']??'')==='WORK_END')$end=max($end,(int)($event['timestamp']??0));if($end>0)$date=(new DateTimeImmutable('@'.intdiv($end,1000)))->setTimezone($tz)->format('Y-m-d');$dayDates[(string)($day['id']??'')]=$date;}
+        foreach(($snapshot['data']['visits']??[])as&$visit){$visitDate=$dayDates[(string)($visit['workDayId']??'')]??'';$visitId=(string)($visit['id']??'');if($userId!==''&&$visitId!==''&&$visitDate!=='')$visitDatesByUser[$userId][$visitId]=$visitDate;foreach(($visit['returnPickupItems']??[])as&$item)if(empty($item['collectionDate']))$item['collectionDate']=$visitDate!==''?$visitDate:(new DateTimeImmutable('@'.intdiv((int)($item['recordedAt']??1794960000000),1000)))->setTimezone($tz)->format('Y-m-d');unset($item);}unset($visit);
+    }unset($snapshot);
+    foreach($data['deliveryNoteOverrides']as$userId=>&$userOverrides)foreach($userOverrides as$visitId=>&$items){$visitDate=$visitDatesByUser[(string)$userId][(string)$visitId]??'';foreach($items as&$item)if(empty($item['collectionDate']))$item['collectionDate']=$visitDate!==''?$visitDate:(new DateTimeImmutable('@'.intdiv((int)($item['recordedAt']??1794960000000),1000)))->setTimezone($tz)->format('Y-m-d');unset($item);}unset($items);unset($userOverrides);
+    $data['deliveryNoteCollectionDateBackfilled']=true;
 }
 
 function rr_backfill_delivery_note_recorded_at(array &$data): void {
@@ -91,6 +104,7 @@ function rr_transaction(callable $operation): mixed {
         $data = rr_load_store();
         $before = hash('sha256', serialize($data));
         rr_backfill_delivery_note_recorded_at($data);
+        rr_backfill_delivery_note_collection_date($data);
         $result = $operation($data);
         $after = hash('sha256', serialize($data));
         if (!hash_equals($before, $after)) rr_save_store($data);
