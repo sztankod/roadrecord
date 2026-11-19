@@ -39,7 +39,7 @@ $result = rr_transaction(function (array &$db) use ($email, $code, $purpose, $in
             $db['devices'][] = ['id' => $deviceId, 'userId' => $userId, 'installationId' => $installationId, 'name' => trim((string)($input['deviceName'] ?? 'Android készülék')), 'appVersion' => (string)($input['appVersion'] ?? ''), 'enabled' => true, 'createdAt' => $now, 'lastSeenAt' => $now, 'lastSyncAt' => null];
         }
     }
-    $db['sessions'][] = ['tokenHash' => hash('sha256', $token), 'userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'createdAt' => $now, 'lastSeenAt' => $now, 'expiresAt' => $now + ($purpose === 'admin' ? 43200 : 31536000)];
+    $db['sessions'][] = ['tokenHash' => hash('sha256', $token), 'userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'adminRole' => $purpose === 'admin' ? 'admin' : null, 'createdAt' => $now, 'lastSeenAt' => $now, 'expiresAt' => $now + ($purpose === 'admin' ? 43200 : 31536000)];
     $syncPolicy = 'EVERY_STOP'; $accessStatus='ACTIVE'; $displayName=''; foreach ($db['users'] as $user) if ($user['id'] === $userId) { $syncPolicy = $user['syncPolicy'] ?? 'EVERY_STOP'; $accessStatus=rr_user_status($user); $displayName=$user['displayName']??''; }
     return ['userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'accessStatus'=>$accessStatus, 'displayName'=>$displayName, 'syncPolicy' => $syncPolicy];
 });

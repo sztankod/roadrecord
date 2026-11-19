@@ -55,7 +55,7 @@ function rr_delivery_dates(array $db, ?string $onlyUserId = null): array {
 }
 
 function rr_delivery_rows(array $db, string $date): array {
-    $rows = [];
+    $grouped = [];
     foreach (rr_latest_user_snapshots($db) as $userId => $snapshot) {
         $data = $snapshot['data'] ?? [];
         $dayIds = [];
@@ -63,30 +63,44 @@ function rr_delivery_rows(array $db, string $date): array {
         if (!$dayIds) continue;
         $places = []; foreach (($data['places'] ?? []) as $place) $places[(string)($place['id'] ?? '')] = $place;
         $user = current(array_filter($db['users'], fn(array $item): bool => ($item['id'] ?? '') === $userId)) ?: [];
+        $courier = (string)($user['displayName'] ?? '') ?: (string)($user['email'] ?? '');
+        $notesByPlace = [];
+        foreach (($data['visits'] ?? []) as $visit) {
+            $placeId=(string)($visit['placeId']??'');
+            foreach (($visit['returnPickupItems'] ?? []) as $item) if ((string)($item['fulfillmentDate'] ?? '') === $date) $notesByPlace[$placeId][]=['fulfillmentDate'=>$date,'note'=>(string)($item['note']??''),'recordedBy'=>$courier];
+        }
+        $visitedPlaces=[];
         foreach (($data['visits'] ?? []) as $visit) {
             if (!isset($dayIds[(string)($visit['workDayId'] ?? '')])) continue;
-            $place = $places[(string)($visit['placeId'] ?? '')] ?? null;
-            if (!$place || !($place['requiresReturnPickup'] ?? false)) continue;
-            foreach (($visit['returnPickupItems'] ?? []) as $item) {
-                $rows[] = [
-                    'stop' => (string)($place['name'] ?? 'Ismeretlen megálló'),
-                    'address' => (string)($place['officialAddress'] ?? ''),
-                    'fulfillmentDate' => (string)($item['fulfillmentDate'] ?? $date),
-                    'note' => (string)($item['note'] ?? ''),
-                    'recordedBy' => (string)($user['displayName'] ?? '') ?: (string)($user['email'] ?? ''),
-                ];
-            }
+            $placeId=(string)($visit['placeId']??'');$place=$places[$placeId]??null;
+            if (!$place || !($place['requiresReturnPickup'] ?? false) || isset($visitedPlaces[$placeId])) continue;
+            $visitedPlaces[$placeId]=true;$stop=(string)($place['name']??'Ismeretlen megálló');$key=strtolower(trim($stop));
+            if(!isset($grouped[$key]))$grouped[$key]=['stop'=>$stop,'couriers'=>[],'items'=>[]];
+            if($courier!==''&&!in_array($courier,$grouped[$key]['couriers'],true))$grouped[$key]['couriers'][]=$courier;
+            foreach(($notesByPlace[$placeId]??[])as$item)$grouped[$key]['items'][]=$item;
         }
     }
-    usort($rows, fn(array $a, array $b): int => [$a['stop'],$a['fulfillmentDate']] <=> [$b['stop'],$b['fulfillmentDate']]);
+    $rows=array_values($grouped);usort($rows,fn(array$a,array$b):int=>strcasecmp($a['stop'],$b['stop']));
     return $rows;
+}
+
+function rr_report_text(string $value): string {
+    $escaped=rr_h($value);
+    $linked=preg_replace_callback('~https?://[^\s<]+~i',fn(array$match):string=>'<a href="'.$match[0].'" style="color:#1479d4">'.$match[0].'</a>',$escaped);
+    return nl2br($linked??$escaped);
+}
+
+function rr_short_report_date(string $value): string {
+    $date=DateTimeImmutable::createFromFormat('!Y-m-d',$value);
+    return $date?$date->format('m.d'):$value;
 }
 
 function rr_delivery_html(array $config, string $date, array $rows): string {
     $heading = trim((string)($config['heading'] ?? '')) ?: 'RoadRecord szállítólevél riport';
-    $body = '<!doctype html><html lang="hu"><head><meta charset="utf-8"></head><body style="margin:0;background:#f3f6fa;font-family:Arial,sans-serif;color:#102b4e"><div style="max-width:900px;margin:auto;padding:24px"><div style="background:#0b2d5c;color:white;padding:20px;border-radius:14px 14px 0 0"><h1 style="margin:0">'.rr_h($heading).'</h1><p style="margin:7px 0 0">Kiszállítási nap: '.rr_h($date).'</p></div><div style="background:white;padding:22px;border:1px solid #d8e1eb"><p style="white-space:pre-line">'.nl2br(rr_h($config['intro'])).'</p><p><strong>Összes szállítólevél: '.count($rows).'</strong></p><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#eef5fb"><th style="padding:9px;text-align:left">Megálló</th><th style="padding:9px;text-align:left">Teljesítés</th><th style="padding:9px;text-align:left">Szállító</th><th style="padding:9px;text-align:left">Megjegyzés</th></tr></thead><tbody>';
-    foreach ($rows as $row) $body .= '<tr><td style="padding:9px;border-top:1px solid #e3e9ef"><strong>'.rr_h($row['stop']).'</strong><br><small>'.rr_h($row['address']).'</small></td><td style="padding:9px;border-top:1px solid #e3e9ef">'.rr_h($row['fulfillmentDate']).'</td><td style="padding:9px;border-top:1px solid #e3e9ef">'.rr_h($row['recordedBy']).'</td><td style="padding:9px;border-top:1px solid #e3e9ef">'.rr_h($row['note']).'</td></tr>';
-    return $body.'</tbody></table></div><p style="margin-top:22px;white-space:pre-line">'.nl2br(rr_h($config['outro'])).'</p></div></div></body></html>';
+    $iconPath=dirname(__DIR__).'/admin/delivery-note-icon.svg';$icon=is_file($iconPath)?'data:image/svg+xml;base64,'.base64_encode((string)file_get_contents($iconPath)):'';
+    $body = '<!doctype html><html lang="hu"><head><meta charset="utf-8"></head><body style="margin:0;background:#f3f6fa;font-family:Arial,sans-serif;color:#102b4e"><div style="max-width:900px;margin:auto;padding:24px"><div style="background:#0b2d5c;color:white;padding:20px;border-radius:14px 14px 0 0"><div style="display:flex;align-items:center;gap:12px">'.($icon!==''?'<img src="'.$icon.'" alt="" width="42" height="42" style="display:block">':'').'<h1 style="margin:0">'.rr_h($heading).'</h1></div><p style="margin:7px 0 0">Kiszállítási nap: '.rr_h($date).'</p></div><div style="background:white;padding:22px;border:1px solid #d8e1eb"><p>'.rr_report_text((string)$config['intro']).'</p><p><strong>Összes megálló: '.count($rows).'</strong></p><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#eef5fb"><th style="padding:9px;text-align:left">Megálló</th><th style="padding:9px;text-align:left">Teljesítési dátum</th><th style="padding:9px;text-align:left">Futár</th><th style="padding:9px;text-align:left">Megjegyzés</th></tr></thead><tbody>';
+    foreach ($rows as $row) {$items=$row['items']??[];$dates=$items?implode('<br>',array_map(fn(array$item):string=>rr_h(rr_short_report_date((string)$item['fulfillmentDate'])),$items)):'<strong style="color:#c83c3c">✕</strong>';$notes=$items?implode('<br>',array_filter(array_map(fn(array$item):string=>rr_h((string)($item['note']??'')),$items))):'';$couriers=implode('<br>',array_map('rr_h',$row['couriers']??[]));$body.='<tr><td style="padding:9px;border-top:1px solid #e3e9ef"><strong>'.rr_h($row['stop']).'</strong></td><td style="padding:9px;border-top:1px solid #e3e9ef">'.$dates.'</td><td style="padding:9px;border-top:1px solid #e3e9ef">'.$couriers.'</td><td style="padding:9px;border-top:1px solid #e3e9ef">'.$notes.'</td></tr>';}
+    return $body.'</tbody></table></div><p style="margin-top:22px">'.rr_report_text((string)$config['outro']).'</p></div></div></body></html>';
 }
 
 function rr_process_delivery_reports(?string $onlyUserId = null): array {

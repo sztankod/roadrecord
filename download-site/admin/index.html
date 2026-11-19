@@ -11,19 +11,27 @@
   <link rel="stylesheet" href="admin.css">
   <link rel="stylesheet" href="admin-extra.css">
   <link rel="stylesheet" href="live.css">
+  <link rel="stylesheet" href="admin-modern.css">
 </head>
 <body>
-  <div class="http-warning">⚠ A kapcsolat HTTP-t használ, ezért a hálózati adatforgalom nincs titkosítva.</div>
   <main>
     <section id="login" class="login-card">
       <img src="../roadrecord-logo.png" alt="RoadRecord logó">
       <h1>RoadRecord Admin</h1>
-      <p>E-mailben küldött egyszer használatos kóddal léphetsz be.</p>
-      <label>E-mail-cím<input id="email" type="email" value="sztankod@gmail.com"></label>
-      <button id="request-code" class="primary">Ellenőrzőkód küldése</button>
-      <div id="code-area" hidden>
-        <label>Ellenőrzőkód<input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000"></label>
-        <button id="verify-code" class="primary">Belépés</button>
+      <p>Válaszd ki a belépés módját.</p>
+      <div class="login-methods"><button id="login-method-code" class="active">Ellenőrzőkód</button><button id="login-method-password">Jelszó</button></div>
+      <div id="code-login">
+        <label>E-mail-cím<input id="email" type="email" value="sztankod@gmail.com"></label>
+        <button id="request-code" class="primary">Ellenőrzőkód küldése</button>
+        <div id="code-area" hidden>
+          <label>Ellenőrzőkód<input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000"></label>
+          <button id="verify-code" class="primary">Belépés</button>
+        </div>
+      </div>
+      <div id="password-login" hidden>
+        <label>E-mail-cím<input id="password-email" type="email" autocomplete="username"></label>
+        <label>Jelszó<input id="password" type="password" autocomplete="current-password"></label>
+        <button id="password-login-button" class="primary">Belépés jelszóval</button>
       </div>
       <p id="login-message" class="message"></p>
     </section>
@@ -31,7 +39,7 @@
     <section id="dashboard" hidden>
       <header class="topbar">
         <div class="brand"><img src="../roadrecord-logo.png" alt=""><div><strong>RoadRecord</strong><span>Adminisztráció</span></div></div>
-        <button id="logout" class="ghost">Kilépés</button>
+        <div class="top-actions"><span class="notification" aria-hidden="true">♧</span><button id="logout" class="ghost">⇥&nbsp; Kilépés</button></div>
       </header>
       <div class="summary-grid">
         <article><span>Felhasználók</span><strong id="user-count">0</strong></article>
@@ -40,12 +48,16 @@
       </div>
       <div class="layout">
         <aside>
-          <div class="aside-head"><h2>Felhasználók</h2><button id="refresh" title="Frissítés">↻</button></div>
-          <input id="search" type="search" placeholder="Keresés e-mail alapján">
-          <button id="central-stops" class="central-stops-button"><span>◆</span><strong>Központi megállótár</strong><small id="central-stop-count">Megnyitás</small></button>
+          <nav class="admin-nav">
+          <button id="central-stops" class="central-stops-button"><span>⌂</span><strong>Központi megállótár</strong><small id="central-stop-count">Megnyitás</small></button>
           <button id="delivery-reports" class="central-stops-button"><span><img src="delivery-note-icon.svg" alt=""></span><strong>Szállítólevél riport</strong><small>Beállítások</small></button>
           <button id="delivery-notes" class="central-stops-button"><span><img src="delivery-note-icon.svg" alt=""></span><strong>Szállítólevelek begyűjtése</strong><small>Napi összesítő</small></button>
           <button id="delivery-summary" class="central-stops-button"><span><img src="delivery-note-icon.svg" alt=""></span><strong>Szállítólevél leltár</strong><small>Teljesítési dátumok</small></button>
+          <div class="aside-section-label">Felhasználók</div>
+          <button id="admin-accounts" class="central-stops-button"><span>♙</span><strong>Userek</strong><small>Admin és guest</small></button>
+          </nav>
+          <div class="aside-head"><h2>Alkalmazás-felhasználók</h2><button id="refresh" title="Frissítés">↻</button></div>
+          <input id="search" type="search" placeholder="Keresés e-mail alapján">
           <div id="users" class="user-list"></div>
         </aside>
         <section id="detail" class="detail empty"><p>Válassz egy felhasználót a részletek megnyitásához.</p></section>

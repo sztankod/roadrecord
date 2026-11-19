@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 function rr_empty_store(): array {
-    return ['users' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryNoteOverrides' => [], 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => []];
+    return ['users' => [], 'adminAccounts' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryNoteOverrides' => [], 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => []];
 }
 
 function rr_backfill_delivery_note_recorded_at(array &$data): void {

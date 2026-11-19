@@ -49,13 +49,17 @@ function rr_session(bool $admin = false): array {
     });
     if (!$found) rr_json(['ok' => false, 'error' => 'A munkamenet lejárt.'], 401);
     if ($admin) {
-        $isAdmin = rr_transaction(function (array &$db) use ($found): bool {
+        $isAdmin = in_array((string)($found['adminRole'] ?? ''), ['admin','guest'], true) || rr_transaction(function (array &$db) use ($found): bool {
             foreach ($db['users'] as $user) if ($user['id'] === $found['userId']) return ($user['role'] ?? 'user') === 'admin';
             return false;
         });
         if (!$isAdmin) rr_json(['ok' => false, 'error' => 'Nincs adminisztrátori jogosultság.'], 403);
     }
     return $found;
+}
+
+function rr_admin_role(array $session): string {
+    return in_array((string)($session['adminRole'] ?? ''), ['admin','guest'], true) ? (string)$session['adminRole'] : 'admin';
 }
 
 function rr_user_status(array $user): string {

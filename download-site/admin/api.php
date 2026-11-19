@@ -4,6 +4,29 @@ require_once dirname(__DIR__) . '/api/bootstrap.php';
 require_once dirname(__DIR__) . '/api/delivery-reports.php';
 $session = rr_session(true);
 $action = $_GET['action'] ?? 'users';
+$adminRole = rr_admin_role($session);
+$guestAllowed = $action === 'session' || ($action === 'delivery-notes' && $_SERVER['REQUEST_METHOD'] === 'GET') || ($action === 'delivery-note-summary' && $_SERVER['REQUEST_METHOD'] === 'GET');
+if ($adminRole === 'guest' && !$guestAllowed) rr_json(['ok'=>false,'error'=>'A guest hozzáférés csak megtekintésre jogosult.'],403);
+
+if ($action === 'session' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    rr_json(['ok'=>true,'role'=>$adminRole]);
+}
+
+if ($action === 'admin-accounts' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $accounts=rr_transaction(fn(array &$db):array=>array_map(fn(array $account):array=>['id'=>$account['id'],'name'=>$account['name']??'','email'=>$account['email']??'','role'=>$account['role']??'guest','enabled'=>$account['enabled']??true,'createdAt'=>$account['createdAt']??null,'lastSeenAt'=>$account['lastSeenAt']??null],$db['adminAccounts']??[]));
+    usort($accounts,fn(array$a,array$b):int=>strcasecmp((string)$a['name'],(string)$b['name']));rr_json(['ok'=>true,'accounts'=>$accounts]);
+}
+
+if ($action === 'admin-accounts' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input=rr_input();$id=trim((string)($input['id']??''));$name=trim((string)($input['name']??''));$email=rr_email($input['email']??'');$password=(string)($input['password']??'');$role=in_array(($input['role']??''),['admin','guest'],true)?(string)$input['role']:'guest';$enabled=(bool)($input['enabled']??true);
+    if($name==='')rr_json(['ok'=>false,'error'=>'A név megadása kötelező.'],422);if($id===''&&strlen($password)<8)rr_json(['ok'=>false,'error'=>'Az új jelszó legalább 8 karakter legyen.'],422);if($id!==''&&$password!==''&&strlen($password)<8)rr_json(['ok'=>false,'error'=>'Az új jelszó legalább 8 karakter legyen.'],422);
+    $saved=rr_transaction(function(array &$db)use($id,$name,$email,$password,$role,$enabled,$session):array{$accounts=&$db['adminAccounts'];foreach($accounts as$account)if(($account['email']??'')===$email&&($account['id']??'')!==$id)rr_json(['ok'=>false,'error'=>'Ezzel az e-mail-címmel már létezik hozzáférés.'],409);$index=null;foreach($accounts as$i=>$account)if(($account['id']??'')===$id){$index=$i;break;}if($index===null){$account=['id'=>rr_id('adm'),'name'=>$name,'email'=>$email,'passwordHash'=>password_hash($password,PASSWORD_DEFAULT),'role'=>$role,'enabled'=>$enabled,'createdAt'=>time(),'lastSeenAt'=>null];$accounts[]=$account;}else{$accounts[$index]['name']=$name;$accounts[$index]['email']=$email;$accounts[$index]['role']=$role;$accounts[$index]['enabled']=$enabled;if($password!=='')$accounts[$index]['passwordHash']=password_hash($password,PASSWORD_DEFAULT);$account=$accounts[$index];}$db['audit'][]=['at'=>time(),'adminUserId'=>$session['userId'],'action'=>'admin-account-save','targetType'=>'adminAccount','targetId'=>$account['id'],'value'=>['email'=>$email,'role'=>$role,'enabled'=>$enabled]];return['id'=>$account['id'],'name'=>$name,'email'=>$email,'role'=>$role,'enabled'=>$enabled];});rr_json(['ok'=>true,'account'=>$saved]);
+}
+
+if ($action === 'admin-accounts' && $_SERVER['REQUEST_METHOD'] === 'DELETE') {
+    $input=rr_input();$id=trim((string)($input['id']??''));if($id==='')rr_json(['ok'=>false,'error'=>'Hiányzó azonosító.'],422);
+    rr_transaction(function(array &$db)use($id,$session):void{$before=count($db['adminAccounts']??[]);$db['adminAccounts']=array_values(array_filter($db['adminAccounts']??[],fn(array$a):bool=>($a['id']??'')!==$id));if(count($db['adminAccounts'])===$before)rr_json(['ok'=>false,'error'=>'A hozzáférés nem található.'],404);$db['sessions']=array_values(array_filter($db['sessions'],fn(array$s):bool=>($s['adminAccountId']??'')!==$id));$db['audit'][]=['at'=>time(),'adminUserId'=>$session['userId'],'action'=>'admin-account-delete','targetType'=>'adminAccount','targetId'=>$id];});rr_json(['ok'=>true]);
+}
 
 if ($action === 'users' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $result = rr_transaction(function (array &$db): array {
@@ -100,9 +123,14 @@ if ($action === 'delivery-report-test' && $_SERVER['REQUEST_METHOD'] === 'POST')
     $input=rr_input();$mode=(string)($input['mode']??'sample');$date=(string)($input['date']??date('Y-m-d'));
     if(!in_array($mode,['sample','live'],true))rr_json(['ok'=>false,'error'=>'Hibás tesztadattípus.'],422);
     if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$date))rr_json(['ok'=>false,'error'=>'Hibás riportdátum.'],422);
-    $result=rr_transaction(function(array &$db)use($session,$mode,$date):array{$config=rr_report_config($db);$user=current(array_filter($db['users'],fn(array $item):bool=>($item['id']??'')===$session['userId']))?:null;if(!$user)rr_json(['ok'=>false,'error'=>'Az adminisztrátor nem található.'],404);return['config'=>$config,'email'=>$user['email'],'rows'=>$mode==='live'?rr_delivery_rows($db,$date):[]];});
+    $result=rr_transaction(function(array &$db)use($session,$mode,$date):array{
+        $config=rr_report_config($db);$email='';
+        if(isset($session['adminAccountId'])){foreach(($db['adminAccounts']??[])as$account)if(($account['id']??'')===$session['adminAccountId']){$email=(string)($account['email']??'');break;}}
+        if($email===''){foreach(($db['users']??[])as$user)if(($user['id']??'')===$session['userId']){$email=(string)($user['email']??'');break;}}
+        return['config'=>$config,'email'=>$email,'rows'=>$mode==='live'?rr_delivery_rows($db,$date):[]];
+    });
     $recipient=strtolower(trim((string)($input['recipient']??'')))?:((string)($result['config']['testRecipient']??'')?:$result['email']);if(!filter_var($recipient,FILTER_VALIDATE_EMAIL))rr_json(['ok'=>false,'error'=>'Hibás tesztcímzett.'],422);
-    $rows=$mode==='live'?$result['rows']:[['stop'=>'Minta megálló','address'=>'Minta cím','fulfillmentDate'=>$date,'note'=>'Teszt riport','recordedBy'=>'RoadRecord']];
+    $rows=$mode==='live'?$result['rows']:[['stop'=>'Minta megálló','couriers'=>['RoadRecord'],'items'=>[['fulfillmentDate'=>$date,'note'=>'Teszt riport','recordedBy'=>'RoadRecord']]]];
     if($mode==='live'&&!$rows)rr_json(['ok'=>false,'error'=>'A kiválasztott naphoz nincs kiküldhető éles adat.'],404);
     rr_send_mail([$recipient],rr_report_subject($result['config'],$date,true),rr_delivery_html($result['config'],$date,$rows));
     rr_json(['ok'=>true,'recipient'=>$recipient,'mode'=>$mode,'date'=>$date,'items'=>count($rows)]);
