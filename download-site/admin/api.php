@@ -13,7 +13,7 @@ if ($action === 'session' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($action === 'admin-accounts' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-    $accounts=rr_transaction(fn(array &$db):array=>array_map(fn(array $account):array=>['id'=>$account['id'],'name'=>$account['name']??'','email'=>$account['email']??'','role'=>$account['role']??'guest','enabled'=>$account['enabled']??true,'createdAt'=>$account['createdAt']??null,'lastSeenAt'=>$account['lastSeenAt']??null],$db['adminAccounts']??[]));
+    $accounts=rr_read(fn(array $db):array=>array_map(fn(array $account):array=>['id'=>$account['id'],'name'=>$account['name']??'','email'=>$account['email']??'','role'=>$account['role']??'guest','enabled'=>$account['enabled']??true,'createdAt'=>$account['createdAt']??null,'lastSeenAt'=>$account['lastSeenAt']??null],$db['adminAccounts']??[]));
     usort($accounts,fn(array$a,array$b):int=>strcasecmp((string)$a['name'],(string)$b['name']));rr_json(['ok'=>true,'accounts'=>$accounts]);
 }
 
@@ -29,7 +29,7 @@ if ($action === 'admin-accounts' && $_SERVER['REQUEST_METHOD'] === 'DELETE') {
 }
 
 if ($action === 'users' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-    $result = rr_transaction(function (array &$db): array {
+    $result = rr_read(function (array $db): array {
         return array_map(function (array $user) use ($db): array {
             $devices = array_values(array_filter($db['devices'], fn(array $device): bool => $device['userId'] === $user['id']));
             $lastSync = 0;
@@ -45,7 +45,7 @@ if ($action === 'users' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 
 if ($action === 'detail' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $userId = trim((string)($_GET['userId'] ?? ''));
-    $result = rr_transaction(function (array &$db) use ($userId): array {
+    $result = rr_read(function (array $db) use ($userId): array {
         $user = current(array_filter($db['users'], fn(array $item): bool => $item['id'] === $userId)) ?: null;
         if (!$user) rr_json(['ok' => false, 'error' => 'A felhasználó nem található.'], 404);
         $devices = array_values(array_filter($db['devices'], fn(array $device): bool => $device['userId'] === $userId));
@@ -59,7 +59,7 @@ if ($action === 'detail' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($action === 'central-stops' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-    $result = rr_transaction(fn(array &$db): array => [
+    $result = rr_read(fn(array $db): array => [
         'stops' => array_values($db['centralStops'] ?? []),
         'updatedAt' => $db['centralStopsUpdatedAt'] ?? null,
     ]);
@@ -67,7 +67,7 @@ if ($action === 'central-stops' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($action === 'delivery-report-settings' && $_SERVER['REQUEST_METHOD'] === 'GET') {
-    $config=rr_transaction(fn(array &$db):array=>rr_report_config($db));
+    $config=rr_read(fn(array $db):array=>rr_report_config($db));
     rr_json(['ok'=>true,'config'=>$config]);
 }
 

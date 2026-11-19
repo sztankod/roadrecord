@@ -2,10 +2,11 @@
 declare(strict_types=1);
 
 function rr_empty_store(): array {
-    return ['users' => [], 'adminAccounts' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryNoteOverrides' => [], 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => []];
+    return ['users' => [], 'adminAccounts' => [], 'devices' => [], 'otps' => [], 'sessions' => [], 'snapshots' => [], 'centralStops' => [], 'centralStopsUpdatedAt' => null, 'deliveryNoteOverrides' => [], 'deliveryReportConfig' => null, 'sentDeliveryReports' => [], 'audit' => [], 'deliveryNoteRecordedAtBackfilled' => false];
 }
 
 function rr_backfill_delivery_note_recorded_at(array &$data): void {
+    if (($data['deliveryNoteRecordedAtBackfilled'] ?? false) === true) return;
     $fallback = 1794960000000; // 2026-11-18 01:00 Europe/Budapest
     foreach ($data['snapshots'] as &$snapshot) {
         foreach (($snapshot['data']['visits'] ?? []) as &$visit) {
@@ -25,6 +26,7 @@ function rr_backfill_delivery_note_recorded_at(array &$data): void {
         unset($items);
     }
     unset($userOverrides);
+    $data['deliveryNoteRecordedAtBackfilled'] = true;
 }
 
 function rr_store_path(): string {
@@ -87,10 +89,25 @@ function rr_transaction(callable $operation): mixed {
     if (!$lock || !flock($lock, LOCK_EX)) throw new RuntimeException('Az adattár foglalt.');
     try {
         $data = rr_load_store();
+        $before = hash('sha256', serialize($data));
         rr_backfill_delivery_note_recorded_at($data);
         $result = $operation($data);
-        rr_save_store($data);
+        $after = hash('sha256', serialize($data));
+        if (!hash_equals($before, $after)) rr_save_store($data);
         return $result;
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+function rr_read(callable $operation): mixed {
+    $lockPath = dirname(rr_store_path()) . '/store.lock';
+    $lock = fopen($lockPath, 'c+');
+    if (!$lock || !flock($lock, LOCK_SH)) throw new RuntimeException('Az adattár foglalt.');
+    try {
+        $data = rr_load_store();
+        return $operation($data);
     } finally {
         flock($lock, LOCK_UN);
         fclose($lock);

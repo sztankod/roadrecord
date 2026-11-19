@@ -38,10 +38,9 @@ function rr_session(bool $admin = false): array {
     $hash = hash('sha256', rr_bearer());
     $now = time();
     $found = null;
-    rr_transaction(function (array &$db) use ($hash, $now, &$found): void {
-        foreach ($db['sessions'] as &$session) {
+    rr_read(function (array $db) use ($hash, $now, &$found): void {
+        foreach ($db['sessions'] as $session) {
             if (hash_equals($session['tokenHash'], $hash) && $session['expiresAt'] > $now) {
-                $session['lastSeenAt'] = $now;
                 $found = $session;
                 break;
             }
@@ -49,7 +48,7 @@ function rr_session(bool $admin = false): array {
     });
     if (!$found) rr_json(['ok' => false, 'error' => 'A munkamenet lejárt.'], 401);
     if ($admin) {
-        $isAdmin = in_array((string)($found['adminRole'] ?? ''), ['admin','guest'], true) || rr_transaction(function (array &$db) use ($found): bool {
+        $isAdmin = in_array((string)($found['adminRole'] ?? ''), ['admin','guest'], true) || rr_read(function (array $db) use ($found): bool {
             foreach ($db['users'] as $user) if ($user['id'] === $found['userId']) return ($user['role'] ?? 'user') === 'admin';
             return false;
         });
