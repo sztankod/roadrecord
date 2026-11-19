@@ -59,7 +59,21 @@ if ($action === 'delivery-note-summary' && $_SERVER['REQUEST_METHOD'] === 'GET')
             $data=$snapshot['data']??[];$user=current(array_filter($db['users'],fn(array $u):bool=>($u['id']??'')===$userId))?:[];$driver=(string)($user['displayName']??'')?:((string)($user['email']??''));
             $places=[];foreach(($data['places']??[])as$place)$places[(string)($place['id']??'')]=$place;
             $performanceDates=[];foreach(($data['days']??[])as$day){$workEnd=0;foreach(($day['events']??[])as$event)if(($event['type']??'')==='WORK_END')$workEnd=max($workEnd,(int)($event['timestamp']??0));if($workEnd>0)$performanceDates[(string)($day['id']??'')]=(new DateTimeImmutable('@'.intdiv($workEnd,1000)))->setTimezone($tz)->format('Y-m-d');}
-            foreach(($data['visits']??[])as$visit){$date=$performanceDates[(string)($visit['workDayId']??'')]??'';$place=$places[(string)($visit['placeId']??'')]??null;if($date===''||!$place||!($place['requiresReturnPickup']??false))continue;$has=false;foreach(($visit['returnPickupItems']??[])as$item)if((string)($item['fulfillmentDate']??'')===$date){$has=true;break;}$result[]=['date'=>$date,'stop'=>(string)($place['name']??'Ismeretlen megálló'),'driver'=>$driver,'hasDeliveryNote'=>$has];}
+            $deliveryNotes=[];
+            foreach(($data['visits']??[])as$visit){
+                $placeId=(string)($visit['placeId']??'');
+                foreach(($visit['returnPickupItems']??[])as$item){
+                    $fulfillmentDate=(string)($item['fulfillmentDate']??'');
+                    if($placeId!==''&&$fulfillmentDate!=='')$deliveryNotes[$placeId.'|'.$fulfillmentDate]=true;
+                }
+            }
+            $seen=[];
+            foreach(($data['visits']??[])as$visit){
+                $date=$performanceDates[(string)($visit['workDayId']??'')]??'';$placeId=(string)($visit['placeId']??'');$place=$places[$placeId]??null;
+                if($date===''||!$place||!($place['requiresReturnPickup']??false))continue;
+                $rowKey=$date.'|'.$placeId.'|'.$driver;if(isset($seen[$rowKey]))continue;$seen[$rowKey]=true;
+                $result[]=['date'=>$date,'stop'=>(string)($place['name']??'Ismeretlen megálló'),'driver'=>$driver,'hasDeliveryNote'=>isset($deliveryNotes[$placeId.'|'.$date])];
+            }
         }
         usort($result,fn(array$a,array$b):int=>[$b['date'],$a['stop'],$a['driver']]<=>[$a['date'],$b['stop'],$b['driver']]);return$result;
     });rr_json(['ok'=>true,'rows'=>$rows]);
