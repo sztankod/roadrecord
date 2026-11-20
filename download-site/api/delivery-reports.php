@@ -123,6 +123,10 @@ function rr_process_delivery_reports(?string $onlyUserId = null): array {
     if (!($config['enabled'] ?? false) || empty($config['recipients'])) return [];
     $timezone = new DateTimeZone('Europe/Budapest'); $now = new DateTimeImmutable('now',$timezone);
     foreach ($candidates['dates'] as $date) {
+        // Automatic delivery is intentionally limited to today's completed work.
+        // Editing or synchronising historical delivery notes must never send a
+        // backlog of old daily reports.
+        if ($date !== $now->format('Y-m-d')) continue;
         $key = 'daily|'.$date; $existing=$candidates['sent'][$key]??null;if(is_array($existing)&&(!empty($existing['sentAt'])||($existing['sendingAt']??0)>time()-600))continue;
         $scheduled = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $date.' '.$config['sendTime'], $timezone); if (!$scheduled || $now < $scheduled) continue;
         $rows = rr_transaction(fn(array &$db): array => rr_delivery_rows($db,$date)); if (!$rows) continue;
