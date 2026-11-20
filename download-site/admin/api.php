@@ -12,6 +12,11 @@ if ($action === 'session' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     rr_json(['ok'=>true,'role'=>$adminRole]);
 }
 
+if ($action === 'admin-login-log' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $rows=rr_read(fn(array $db):array=>array_values(array_reverse(array_slice($db['adminLoginLog']??[],-500))));
+    rr_json(['ok'=>true,'rows'=>$rows]);
+}
+
 if ($action === 'admin-accounts' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $accounts=rr_read(fn(array $db):array=>array_map(fn(array $account):array=>['id'=>$account['id'],'name'=>$account['name']??'','email'=>$account['email']??'','role'=>$account['role']??'guest','enabled'=>$account['enabled']??true,'createdAt'=>$account['createdAt']??null,'lastSeenAt'=>$account['lastSeenAt']??null],$db['adminAccounts']??[]));
     usort($accounts,fn(array$a,array$b):int=>strcasecmp((string)$a['name'],(string)$b['name']));rr_json(['ok'=>true,'accounts'=>$accounts]);

@@ -41,6 +41,7 @@ $result = rr_transaction(function (array &$db) use ($email, $code, $purpose, $in
     }
     $db['sessions'][] = ['tokenHash' => hash('sha256', $token), 'userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'adminRole' => $purpose === 'admin' ? 'admin' : null, 'createdAt' => $now, 'lastSeenAt' => $now, 'expiresAt' => $now + ($purpose === 'admin' ? 43200 : 31536000)];
     $syncPolicy = 'EVERY_STOP'; $accessStatus='ACTIVE'; $displayName=''; foreach ($db['users'] as $user) if ($user['id'] === $userId) { $syncPolicy = $user['syncPolicy'] ?? 'EVERY_STOP'; $accessStatus=rr_user_status($user); $displayName=$user['displayName']??''; }
+    if($purpose==='admin'){$db['adminLoginLog'][]=['id'=>rr_id('login'),'at'=>$now,'accountId'=>$userId,'name'=>$displayName,'email'=>$email,'role'=>'admin','method'=>'CODE','ip'=>(string)($_SERVER['REMOTE_ADDR']??'')];$db['adminLoginLog']=array_slice($db['adminLoginLog'],-1000);}
     return ['userId' => $userId, 'deviceId' => $deviceId, 'role' => $role, 'accessStatus'=>$accessStatus, 'displayName'=>$displayName, 'syncPolicy' => $syncPolicy];
 });
 rr_json(['ok' => true, 'token' => $token] + $result);
