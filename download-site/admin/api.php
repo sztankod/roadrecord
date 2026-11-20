@@ -5,11 +5,17 @@ require_once dirname(__DIR__) . '/api/delivery-reports.php';
 $session = rr_session(true);
 $action = $_GET['action'] ?? 'users';
 $adminRole = rr_admin_role($session);
-$guestAllowed = $action === 'session' || ($action === 'delivery-notes' && $_SERVER['REQUEST_METHOD'] === 'GET') || ($action === 'delivery-note-summary' && $_SERVER['REQUEST_METHOD'] === 'GET');
+$guestAllowed = $action === 'session' || $action === 'session-keepalive' || ($action === 'delivery-notes' && $_SERVER['REQUEST_METHOD'] === 'GET') || ($action === 'delivery-note-summary' && $_SERVER['REQUEST_METHOD'] === 'GET');
 if ($adminRole === 'guest' && !$guestAllowed) rr_json(['ok'=>false,'error'=>'A guest hozzáférés csak megtekintésre jogosult.'],403);
 
 if ($action === 'session' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     rr_json(['ok'=>true,'role'=>$adminRole]);
+}
+
+if ($action === 'session-keepalive' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $tokenHash=(string)($session['tokenHash']??'');$now=time();
+    rr_transaction(function(array &$db)use($tokenHash,$now):void{foreach($db['sessions']as&$item)if(hash_equals((string)($item['tokenHash']??''),$tokenHash)){$item['lastSeenAt']=$now;$item['expiresAt']=$now+300;break;}unset($item);});
+    rr_json(['ok'=>true,'expiresAt'=>$now+300]);
 }
 
 if ($action === 'admin-login-log' && $_SERVER['REQUEST_METHOD'] === 'GET') {

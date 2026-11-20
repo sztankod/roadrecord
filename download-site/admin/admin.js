@@ -5,6 +5,8 @@ const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp
 const fmtDate = value => value ? new Intl.DateTimeFormat('hu-HU',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value * 1000)) : '–';
 const fmtDuration = ms => { const minutes=Math.max(0,Math.round((ms||0)/60000)); return `${Math.floor(minutes/60)} ó ${String(minutes%60).padStart(2,'0')} p`; };
 const fmtKm = meters => `${((meters||0)/1000).toLocaleString('hu-HU',{maximumFractionDigits:1})} km`;
+const ADMIN_IDLE_MS=5*60*1000;
+let adminLastActivity=Date.now(),adminIdleTimer=null,adminKeepaliveBusy=false;
 const api = async (path, options={}) => {
   const headers = {'Content-Type':'application/json', ...(options.headers||{})};
   if(state.token) headers.Authorization=`Bearer ${state.token}`;
@@ -14,9 +16,13 @@ const api = async (path, options={}) => {
   return data;
 };
 
-function showLogin(message=''){$('login').hidden=false;$('dashboard').hidden=true;$('login-message').textContent=message;}
+function showLogin(message=''){$('login').hidden=false;$('dashboard').hidden=true;$('login-message').textContent=message;clearTimeout(adminIdleTimer);}
+function endAdminSession(message='Az admin-munkamenet 5 perc tétlenség miatt lejárt.'){state.token='';state.role='admin';localStorage.removeItem('rrAdminToken');localStorage.removeItem('rrAdminRole');showLogin(message);}
+function touchAdminActivity(){if(!state.token||$('dashboard').hidden)return;adminLastActivity=Date.now();clearTimeout(adminIdleTimer);adminIdleTimer=setTimeout(()=>endAdminSession(),ADMIN_IDLE_MS);}
+['pointerdown','keydown','touchstart','wheel'].forEach(type=>window.addEventListener(type,touchAdminActivity,{passive:true}));
+setInterval(async()=>{if(!state.token||$('dashboard').hidden||adminKeepaliveBusy||Date.now()-adminLastActivity>90000)return;adminKeepaliveBusy=true;try{await api('api.php?action=session-keepalive',{method:'POST'});}catch(error){endAdminSession(error.message);}finally{adminKeepaliveBusy=false;}},60000);
 function applyAdminRole(){const guest=state.role==='guest';document.body.classList.toggle('guest-mode',guest);['central-stops','delivery-reports','admin-accounts','admin-login-log','refresh','search','users'].forEach(id=>{if($(id))$(id).hidden=guest});document.querySelector('.aside-head').hidden=guest;document.querySelector('.aside-section-label').hidden=guest;document.querySelector('.summary-grid').hidden=guest;}
-async function showDashboard(){$('login').hidden=true;$('dashboard').hidden=false;try{const session=await api('api.php?action=session');state.role=session.role||'admin';localStorage.setItem('rrAdminRole',state.role);applyAdminRole();state.role==='guest'?loadDeliveryNotes():loadUsers();}catch(error){state.token='';localStorage.removeItem('rrAdminToken');showLogin(error.message);}}
+async function showDashboard(){$('login').hidden=true;$('dashboard').hidden=false;try{const session=await api('api.php?action=session');state.role=session.role||'admin';localStorage.setItem('rrAdminRole',state.role);touchAdminActivity();applyAdminRole();state.role==='guest'?loadDeliveryNotes():loadUsers();}catch(error){state.token='';localStorage.removeItem('rrAdminToken');showLogin(error.message);}}
 
 $('login-method-code').onclick=()=>{$('login-method-code').classList.add('active');$('login-method-password').classList.remove('active');$('code-login').hidden=false;$('password-login').hidden=true;$('login-message').textContent='';};
 $('login-method-password').onclick=()=>{$('login-method-password').classList.add('active');$('login-method-code').classList.remove('active');$('password-login').hidden=false;$('code-login').hidden=true;$('login-message').textContent='';};
@@ -34,7 +40,7 @@ $('verify-code').onclick=async()=>{
   finally{$('verify-code').disabled=false;}
 };
 $('password-login-button').onclick=async()=>{const button=$('password-login-button');button.disabled=true;$('login-message').textContent='Belépés…';try{const data=await api(API+'admin-password-login.php',{method:'POST',body:JSON.stringify({email:$('password-email').value,password:$('password').value})});state.token=data.token;state.role=data.role||'guest';localStorage.setItem('rrAdminToken',state.token);localStorage.setItem('rrAdminRole',state.role);showDashboard();}catch(error){$('login-message').textContent=error.message;}finally{button.disabled=false;}};
-$('logout').onclick=()=>{state.token='';state.role='admin';localStorage.removeItem('rrAdminToken');localStorage.removeItem('rrAdminRole');showLogin('Sikeresen kijelentkeztél.');};
+$('logout').onclick=()=>endAdminSession('Sikeresen kijelentkeztél.');
 $('refresh').onclick=()=>state.selected==='central'?loadCentralStops():loadUsers();
 $('search').oninput=()=>renderUsers();
 $('central-stops').onclick=()=>loadCentralStops();

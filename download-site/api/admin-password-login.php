@@ -19,7 +19,7 @@ $result = rr_transaction(function (array &$db) use ($email, $password, $now, $to
     if (!($account['enabled'] ?? true)) rr_json(['ok' => false, 'error' => 'Ez a hozzáférés le van tiltva.'], 403);
     $role = in_array(($account['role'] ?? ''), ['admin','guest'], true) ? $account['role'] : 'guest';
     $account['lastSeenAt'] = $now;
-    $db['sessions'][] = ['tokenHash'=>hash('sha256',$token),'userId'=>(string)$account['id'],'deviceId'=>null,'role'=>$role,'adminRole'=>$role,'adminAccountId'=>(string)$account['id'],'createdAt'=>$now,'lastSeenAt'=>$now,'expiresAt'=>$now+43200];
+    $db['sessions'][] = ['tokenHash'=>hash('sha256',$token),'userId'=>(string)$account['id'],'deviceId'=>null,'role'=>$role,'adminRole'=>$role,'adminAccountId'=>(string)$account['id'],'createdAt'=>$now,'lastSeenAt'=>$now,'expiresAt'=>$now+300];
     $db['adminLoginLog'][]=['id'=>rr_id('login'),'at'=>$now,'accountId'=>(string)$account['id'],'name'=>(string)($account['name']??''),'email'=>(string)$account['email'],'role'=>$role,'method'=>'PASSWORD','ip'=>(string)($_SERVER['REMOTE_ADDR']??'')];
     $db['adminLoginLog']=array_slice($db['adminLoginLog'],-1000);
     return ['role'=>$role,'displayName'=>(string)($account['name']??''),'email'=>(string)$account['email']];
